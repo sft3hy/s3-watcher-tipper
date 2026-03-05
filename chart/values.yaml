@@ -6,15 +6,15 @@ image:
 # AWS credentials — populated via Kubernetes Secret (see secret.yaml)
 # Set these in your ArgoCD application or via `helm install --set`
 aws:
-  region: us-east-1
+  region: eu-west-1
   existingSecret: "s3-watcher-creds" # set to use a pre-existing secret, e.g. "s3-watcher-creds"
   accessKeyId: "" # ignored if existingSecret is set
   secretAccessKey: "" # ignored if existingSecret is set
 
 s3:
-  bucketName: "" # required
-  prefix: "" # optional folder prefix
-  pollIntervalSeconds: 3600
+  bucketName: "atreides-gold-customer-data-prod-a1ce8606" # required
+  prefix: "clairvoyant/sample" # optional folder prefix
+  pollIntervalSeconds: 86400
 
 credentials:
   existingSecret: "signal-monitor-credentials"

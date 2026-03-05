@@ -13,7 +13,7 @@ AWS_SECRET_ACCESS_KEY = os.environ["AWS_SECRET_ACCESS_KEY"]
 AWS_REGION = os.environ.get("AWS_REGION", "us-east-1")
 BUCKET_NAME = os.environ["S3_BUCKET_NAME"]
 PREFIX = os.environ.get("S3_PREFIX", "")
-POLL_INTERVAL_SECONDS = int(os.environ.get("POLL_INTERVAL_SECONDS", "3600"))
+POLL_INTERVAL_SECONDS = int(os.environ.get("POLL_INTERVAL_SECONDS", "86400"))
 # ─────────────────────────────────────────────────────────────────────────────
 
 s3 = boto3.client(
@@ -24,13 +24,31 @@ s3 = boto3.client(
 )
 
 
-def list_objects(bucket, prefix=""):
-    objects = {}
+def get_most_recent_day_objects(bucket, prefix=""):
+    import re
+
+    objects_by_date = {}
     paginator = s3.get_paginator("list_objects_v2")
+    date_pattern = re.compile(r"date=(\d{4}-\d{2}-\d{2})")
+
     for page in paginator.paginate(Bucket=bucket, Prefix=prefix):
         for obj in page.get("Contents", []):
-            objects[obj["Key"]] = obj["ETag"]
-    return objects
+            key = obj["Key"]
+            if "centcom" not in key.lower():
+                continue
+
+            match = date_pattern.search(key)
+            if match:
+                date_str = match.group(1)
+                if date_str not in objects_by_date:
+                    objects_by_date[date_str] = {}
+                objects_by_date[date_str][key] = obj["ETag"]
+
+    if not objects_by_date:
+        return None, {}
+
+    most_recent_date = max(objects_by_date.keys())
+    return most_recent_date, objects_by_date[most_recent_date]
 
 
 def process_parquet_file(bucket, key):
@@ -42,17 +60,39 @@ def process_parquet_file(bucket, key):
         s3.download_file(bucket, key, tmp_path)
 
         df = pd.read_parquet(tmp_path)
-        records = df.to_dict("records")
+        csv_data = df.to_csv(index=False)
 
-        count = 0
-        for row in records:
-            message_text = json.dumps(row)
-            send_public_message(roomName="atreides_data", message=message_text)
-            count += 1
+        # Max message size is 10000 chars. We use 9000 to leave room for formatting.
+        chunk_size = 9000
+        lines = csv_data.split("\n")
+
+        chunks = []
+        current_chunk = ""
+        for line in lines:
+            if not line:
+                continue
+            if len(current_chunk) + len(line) + 1 > chunk_size:
+                if current_chunk:
+                    chunks.append(current_chunk)
+                current_chunk = line + "\n"
+            else:
+                current_chunk += line + "\n"
+        if current_chunk:
+            chunks.append(current_chunk)
+
+        filename = key.split("/")[-1]
+        for i, chunk in enumerate(chunks):
+            if len(chunks) > 1:
+                message = (
+                    f"File: `{filename}` (Part {i+1}/{len(chunks)})\n```csv\n{chunk}```"
+                )
+            else:
+                message = f"File: `{filename}`\n```csv\n{chunk}```"
+            send_public_message(roomName="sams_test_room", message=message)
 
         os.remove(tmp_path)
         print(
-            f"[{now}] Successfully sent {count} records to ChatSurfer from {key}",
+            f"[{now}] Successfully sent {len(chunks)} chunks to ChatSurfer from {key}",
             flush=True,
         )
     except Exception as e:
@@ -115,33 +155,37 @@ def check_for_changes(bucket, prefix, previous_state):
 
 if __name__ == "__main__":
     print(
-        f"Starting S3 watcher. Base prefix: s3://{BUCKET_NAME}/{PREFIX} — polling every {POLL_INTERVAL_SECONDS}s",
+        f"Starting S3 daily dump. Base prefix: s3://{BUCKET_NAME}/{PREFIX} — polling every {POLL_INTERVAL_SECONDS}s",
         flush=True,
     )
 
-    # We use a state dictionary keyed by the dynamic prefix so we don't cross signals
     states = {}
 
     while True:
-        target_date = (datetime.utcnow() - timedelta(days=3)).strftime("%Y-%m-%d")
+        most_recent_date, current_state = get_most_recent_day_objects(
+            BUCKET_NAME, PREFIX
+        )
 
-        # Build dynamic prefix. Only append the slash if PREFIX is non-empty and missing it.
-        if PREFIX and not PREFIX.endswith("/"):
-            dynamic_prefix = f"{PREFIX}/date={target_date}/"
-        elif PREFIX:
-            dynamic_prefix = f"{PREFIX}date={target_date}/"
+        if most_recent_date:
+            state_key = f"processed_{most_recent_date}"
+            if state_key not in states:
+                states[state_key] = current_state
+                print(
+                    f"[{datetime.utcnow().strftime('%Y-%m-%dT%H:%M:%SZ')}] Found {len(current_state)} object(s) in centcom for most recent day ({most_recent_date}). Processing...",
+                    flush=True,
+                )
+                for key in sorted(current_state.keys()):
+                    if key.endswith(".parquet"):
+                        process_parquet_file(BUCKET_NAME, key)
+            else:
+                print(
+                    f"[{datetime.utcnow().strftime('%Y-%m-%dT%H:%M:%SZ')}] Already processed data for {most_recent_date}. Waiting for next day...",
+                    flush=True,
+                )
         else:
-            dynamic_prefix = f"date={target_date}/"
-
-        if dynamic_prefix not in states:
-            states[dynamic_prefix] = list_objects(BUCKET_NAME, dynamic_prefix)
             print(
-                f"[{datetime.utcnow().strftime('%Y-%m-%dT%H:%M:%SZ')}] Initializing state for {dynamic_prefix}. {len(states[dynamic_prefix])} object(s) currently found.",
+                f"[{datetime.utcnow().strftime('%Y-%m-%dT%H:%M:%SZ')}] No date partitioned files found in centcom. Waiting...",
                 flush=True,
-            )
-        else:
-            states[dynamic_prefix] = check_for_changes(
-                BUCKET_NAME, dynamic_prefix, states[dynamic_prefix]
             )
 
         time.sleep(POLL_INTERVAL_SECONDS)

@@ -5,7 +5,7 @@ from config import *
 
 
 def send_public_message(
-    message_text: str,
+    message: str,
     roomName: str,
     classification: str = "UNCLASSIFIED//FOUO",
     domainId: str = "chatsurferxmppunclass",
@@ -14,9 +14,9 @@ def send_public_message(
     headers = {
         "Content-type": "application/json",
     }
-    message = {
+    payload = {
         "classification": classification,
-        "message": message_text,
+        "message": message,
         "domainId": domainId,
         "nickName": nickName,
         "roomName": roomName,
@@ -31,7 +31,7 @@ def send_public_message(
             cert=(CERT_PATH, KEY_PATH),
             verify=CA_BUNDLE_PATH,
             headers=headers,
-            json=message,
+            json=payload,
         )
         if send.status_code == 429 and attempt < max_attempts - 1:
             sleep_time = random.uniform(1.0, 3.0) * (2**attempt)
