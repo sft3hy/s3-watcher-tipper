@@ -40,6 +40,8 @@ serviceAccount:
 
 imagePullSecrets:
   - name: s-hxl2n
+nameOverride: ""
+fullnameOverride: ""
 
 extraVolumes:
   - name: certs-volume
