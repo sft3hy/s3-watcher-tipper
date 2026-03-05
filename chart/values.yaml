@@ -1,0 +1,59 @@
+image:
+  repository: harbor.i2cv.io/cosmichorizon/s3-watcher # e.g. ghcr.io/yourorg/s3-watcher
+  tag: "1.0.0"
+  pullPolicy: Always
+
+# AWS credentials — populated via Kubernetes Secret (see secret.yaml)
+# Set these in your ArgoCD application or via `helm install --set`
+aws:
+  region: us-east-1
+  existingSecret: "s3-watcher-creds" # set to use a pre-existing secret, e.g. "s3-watcher-creds"
+  accessKeyId: "" # ignored if existingSecret is set
+  secretAccessKey: "" # ignored if existingSecret is set
+
+s3:
+  bucketName: "" # required
+  prefix: "" # optional folder prefix
+  pollIntervalSeconds: 3600
+
+credentials:
+  existingSecret: "signal-monitor-credentials"
+
+resources:
+  requests:
+    cpu: 50m
+    memory: 64Mi
+  limits:
+    cpu: 200m
+    memory: 128Mi
+
+# Number of replicas — keep at 1 to avoid duplicate log output
+replicaCount: 1
+
+nodeSelector: {}
+tolerations: []
+affinity: {}
+
+serviceAccount:
+  create: true
+  name: ""
+
+imagePullSecrets:
+  - name: s-hxl2n
+
+extraVolumes:
+  - name: certs-volume
+    secret:
+      secretName: cosmic-npe
+  - name: dod-ca-volume
+    secret:
+      secretName: dod-ca-pem
+
+# Mount paths for extra volumes
+extraVolumeMounts:
+  - name: certs-volume
+    mountPath: "/certs"
+    readOnly: true
+  - name: dod-ca-volume
+    mountPath: "/ca-certs"
+    readOnly: true
