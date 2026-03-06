@@ -1,0 +1,48 @@
+{{- if .Values.clickhouse.enabled }}
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: {{ include "s3-watcher.fullname" . }}-ingest-init
+  labels:
+    app: {{ include "s3-watcher.fullname" . }}-ingest
+spec:
+  template:
+    metadata:
+      name: ingest-init
+    spec:
+      restartPolicy: OnFailure
+      containers:
+      - name: ingest
+        image: clickhouse/clickhouse-server:latest
+        env:
+        - name: CLICKHOUSE_HOST
+          value: {{ include "s3-watcher.fullname" . }}-clickhouse
+        - name: AWS_REGION
+          value: {{ .Values.aws.region | quote }}
+        - name: S3_BUCKET_NAME
+          value: {{ .Values.s3.bucketName | quote }}
+        - name: S3_PREFIX
+          value: {{ .Values.s3.prefix | quote }}
+        command:
+        - /bin/sh
+        - -c
+        - |
+          while ! clickhouse-client --host $CLICKHOUSE_HOST --query "SELECT 1" > /dev/null 2>&1; do
+            echo "Waiting for ClickHouse to start..."
+            sleep 5
+          done
+          
+          echo "ClickHouse ready. Starting S3 bulk ingestion..."
+          S3_URI="https://${S3_BUCKET_NAME}.s3.${AWS_REGION}.amazonaws.com/${S3_PREFIX}**/*.parquet"
+          
+          # We use clickhouse native S3 credentials (inherited by the server process)
+          clickhouse-client --host $CLICKHOUSE_HOST --query="
+            CREATE TABLE IF NOT EXISTS sigint_data 
+            ENGINE = MergeTree 
+            ORDER BY tuple() 
+            SETTINGS schema_inference_make_columns_nullable=1 
+            AS SELECT * FROM s3('${S3_URI}', 'Parquet')
+          "
+          
+          echo "S3 Bulk ingestion complete."
+{{- end }}

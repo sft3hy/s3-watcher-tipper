@@ -5,6 +5,7 @@ import tempfile
 import json
 import pandas as pd
 import logging
+import requests
 from datetime import datetime, timedelta
 
 from pack_parquet_to_csv_zips import pack
@@ -16,6 +17,8 @@ AWS_REGION = os.environ.get("AWS_REGION", "us-east-1")
 BUCKET_NAME = os.environ["S3_BUCKET_NAME"]
 PREFIX = os.environ.get("S3_PREFIX", "")
 POLL_INTERVAL_SECONDS = int(os.environ.get("POLL_INTERVAL_SECONDS", "86400"))
+CLICKHOUSE_HOST = os.environ.get("CLICKHOUSE_HOST", "")
+CLICKHOUSE_ENABLED = os.environ.get("CLICKHOUSE_ENABLED", "false").lower() == "true"
 # ─────────────────────────────────────────────────────────────────────────────
 
 # Enable verbose debugging for bottom dependencies
@@ -122,6 +125,28 @@ def process_parquet_file(bucket, key):
             chunks.append(current_chunk)
 
         filename = key.split("/")[-1]
+
+        # Continuously sync new items to ClickHouse
+        if CLICKHOUSE_ENABLED and CLICKHOUSE_HOST:
+            try:
+                url = f"http://{CLICKHOUSE_HOST}:8123/?query=INSERT INTO sigint_data FORMAT CSVWithNames"
+                response = requests.post(url, data=csv_data.encode("utf-8"))
+                if response.status_code == 200:
+                    print(
+                        f"[{now}] Successfully pushed {filename} (live sync) to ClickHouse.",
+                        flush=True,
+                    )
+                else:
+                    print(
+                        f"[{now}] Failed to push {filename} to ClickHouse: {response.text}",
+                        flush=True,
+                    )
+            except Exception as e:
+                print(
+                    f"[{now}] Exception pushing {filename} to ClickHouse: {e}",
+                    flush=True,
+                )
+
         for i, chunk in enumerate(chunks):
             if len(chunks) > 1:
                 message = (

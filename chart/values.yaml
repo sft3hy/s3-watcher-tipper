@@ -61,3 +61,24 @@ extraVolumeMounts:
   - name: dod-ca-volume
     mountPath: "/ca-certs"
     readOnly: true
+
+ingress:
+  enabled: true
+  className: ""
+  annotations:
+    nginx.ingress.kubernetes.io/use-regex: "true"
+    nginx.ingress.kubernetes.io/rewrite-target: /$2
+    nginx.ingress.kubernetes.io/configuration-snippet: |
+      rewrite ^(/s3-watcher)$ $1/ permanent;
+  hosts:
+    - host: test-cosmichorizon-worker-68a3110f01feebd0.elb.us-gov-west-1.amazonaws.com
+      paths:
+        - path: /()(s3-watcher(?:/|$).*)
+          pathType: ImplementationSpecific
+          backendName: analyze
+          backendPort: 8000
+  tls: []
+
+clickhouse:
+  enabled: true
+  storage: 10Gi

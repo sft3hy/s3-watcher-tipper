@@ -1,0 +1,74 @@
+{{- if .Values.clickhouse.enabled }}
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: {{ include "s3-watcher.fullname" . }}-clickhouse
+  labels:
+    app: {{ include "s3-watcher.fullname" . }}-clickhouse
+spec:
+  serviceName: {{ include "s3-watcher.fullname" . }}-clickhouse
+  replicas: 1
+  selector:
+    matchLabels:
+      app: {{ include "s3-watcher.fullname" . }}-clickhouse
+  template:
+    metadata:
+      labels:
+        app: {{ include "s3-watcher.fullname" . }}-clickhouse
+    spec:
+      containers:
+      - name: clickhouse
+        image: clickhouse/clickhouse-server:latest
+        env:
+        - name: AWS_ACCESS_KEY_ID
+          valueFrom:
+            secretKeyRef:
+              name: {{ include "s3-watcher.secretName" . }}
+              key: aws-access-key-id
+        - name: AWS_SECRET_ACCESS_KEY
+          valueFrom:
+            secretKeyRef:
+              name: {{ include "s3-watcher.secretName" . }}
+              key: aws-secret-access-key
+        - name: AWS_REGION
+          value: {{ .Values.aws.region | quote }}
+        ports:
+        - containerPort: 8123
+        - containerPort: 9000
+        volumeMounts:
+        - name: data
+          mountPath: /var/lib/clickhouse
+        resources:
+          requests:
+            cpu: 1000m
+            memory: 2Gi
+          limits:
+            cpu: 4000m
+            memory: 8Gi
+  volumeClaimTemplates:
+  - metadata:
+      name: data
+    spec:
+      accessModes: [ "ReadWriteOnce" ]
+      resources:
+        requests:
+          storage: {{ .Values.clickhouse.storage }}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "s3-watcher.fullname" . }}-clickhouse
+  labels:
+    app: {{ include "s3-watcher.fullname" . }}-clickhouse
+spec:
+  type: ClusterIP
+  ports:
+  - port: 8123
+    targetPort: 8123
+    name: http
+  - port: 9000
+    targetPort: 9000
+    name: native
+  selector:
+    app: {{ include "s3-watcher.fullname" . }}-clickhouse
+{{- end }}

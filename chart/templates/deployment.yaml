@@ -32,6 +32,10 @@ spec:
               value: {{ .Values.s3.prefix | quote }}
             - name: POLL_INTERVAL_SECONDS
               value: {{ .Values.s3.pollIntervalSeconds | quote }}
+            - name: CLICKHOUSE_HOST
+              value: {{ include "s3-watcher.fullname" . }}-clickhouse
+            - name: CLICKHOUSE_ENABLED
+              value: {{ .Values.clickhouse.enabled | quote }}
             - name: AWS_ACCESS_KEY_ID
               valueFrom:
                 secretKeyRef:
