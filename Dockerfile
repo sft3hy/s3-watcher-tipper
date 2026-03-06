@@ -12,7 +12,8 @@ COPY watcher.py .
 COPY cs_helpers.py .
 COPY config.py .
 COPY pack_parquet_to_csv_zips.py .
+COPY analyze.py .
 
 USER nobody
 
-CMD ["python", "watcher.py"]
+CMD ["python", "analyze.py"]
