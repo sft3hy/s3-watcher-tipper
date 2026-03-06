@@ -14,6 +14,7 @@ COPY config.py .
 COPY pack_parquet_to_csv_zips.py .
 COPY analyze.py .
 
-USER nobody
+RUN groupadd -r appuser && useradd -m -r -g appuser appuser
+USER appuser
 
 CMD ["python", "analyze.py"]
