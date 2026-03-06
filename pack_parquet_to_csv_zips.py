@@ -97,7 +97,7 @@ def get_or_create_folder(service, folder_name, parent_id=None):
     return items[0].get("id")
 
 
-def get_target_folder_id(service, path="cosmic/iran-zips"):
+def get_target_folder_id(service, path):
     parts = path.strip("/").split("/")
     parent_id = None
     for part in parts:
@@ -203,7 +203,9 @@ def rel_parquet_to_csv(rel: str) -> str:
 # ── Packing logic ──────────────────────────────────────────────────────────────
 
 
-def pack(files_iter, output_dir: str, source_label: str, bucket: str = None):
+def pack(
+    files_iter, output_dir: str, source_label: str, bucket: str = None, prefix: str = ""
+):
     """
     files_iter yields (source_ref, relative_path_str).
     source_label: "s3" or "local".
@@ -216,8 +218,13 @@ def pack(files_iter, output_dir: str, source_label: str, bucket: str = None):
 
     print("Initializing Google Drive API...")
     drive_service = authenticate_gdrive()
-    target_folder_id = get_target_folder_id(drive_service, "cosmic/iran-zips")
-    print(f"Initialized Drive API. Target Folder ID: {target_folder_id}")
+
+    # Prepend the parent folder to the specific S3 partition prefix
+    drive_path = f"cosmic/iran-zips/{prefix}".strip("/")
+    target_folder_id = get_target_folder_id(drive_service, drive_path)
+    print(
+        f"Initialized Drive API. Target Folder ID: {target_folder_id} (Path: {drive_path})"
+    )
 
     zip_index = 1
     zip_count = 0

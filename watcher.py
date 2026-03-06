@@ -59,24 +59,37 @@ s3 = boto3.client(
 def get_all_day_objects(bucket, prefix=""):
     import re
 
-    objects_by_date = {}
+    objects_by_dataset_date = {}
     paginator = s3.get_paginator("list_objects_v2")
     date_pattern = re.compile(r"date=(\d{4}-\d{2}-\d{2})")
 
     for page in paginator.paginate(Bucket=bucket, Prefix=prefix):
         for obj in page.get("Contents", []):
             key = obj["Key"]
-            if "centcom" not in key.lower():
-                continue
 
             match = date_pattern.search(key)
             if match:
                 date_str = match.group(1)
-                if date_str not in objects_by_date:
-                    objects_by_date[date_str] = {}
-                objects_by_date[date_str][key] = obj["ETag"]
 
-    return objects_by_date
+                # Extract the base dataset path before the date partition
+                base_s3_path = key[: match.start()].strip("/")
+
+                # Determine the drive prefix (e.g. sample/centcom)
+                drive_prefix = base_s3_path
+                if drive_prefix.startswith("clairvoyant/"):
+                    drive_prefix = drive_prefix[len("clairvoyant/") :]
+                elif drive_prefix.startswith(prefix.strip("/")):
+                    # Fallback just in case prefix is different than clairvoyant/
+                    drive_prefix = drive_prefix[len(prefix.strip("/")) :]
+
+                drive_prefix = drive_prefix.strip("/")
+
+                group_key = (drive_prefix, date_str)
+                if group_key not in objects_by_dataset_date:
+                    objects_by_dataset_date[group_key] = {}
+                objects_by_dataset_date[group_key][key] = obj["ETag"]
+
+    return objects_by_dataset_date
 
 
 def process_parquet_file(bucket, key):
@@ -190,16 +203,18 @@ if __name__ == "__main__":
     states = {}
 
     while True:
-        objects_by_date = get_all_day_objects(BUCKET_NAME, PREFIX)
+        objects_by_dataset_date = get_all_day_objects(BUCKET_NAME, PREFIX)
 
-        if objects_by_date:
-            for date_str in sorted(objects_by_date.keys()):
-                current_state = objects_by_date[date_str]
-                state_key = f"processed_{date_str}"
+        if objects_by_dataset_date:
+            for group_key in sorted(objects_by_dataset_date.keys()):
+                drive_prefix, date_str = group_key
+                current_state = objects_by_dataset_date[group_key]
+                state_key = f"processed_{drive_prefix}_{date_str}"
+
                 if state_key not in states:
                     states[state_key] = current_state
                     print(
-                        f"[{datetime.utcnow().strftime('%Y-%m-%dT%H:%M:%SZ')}] Found {len(current_state)} object(s) in centcom for day ({date_str}). Processing...",
+                        f"[{datetime.utcnow().strftime('%Y-%m-%dT%H:%M:%SZ')}] Found {len(current_state)} object(s) in the bucket for {drive_prefix} on day ({date_str}). Processing...",
                         flush=True,
                     )
 
@@ -219,12 +234,13 @@ if __name__ == "__main__":
                                 output_dir="/tmp/zips",
                                 source_label="s3",
                                 bucket=BUCKET_NAME,
+                                prefix=drive_prefix,
                             )
                         except Exception as e:
                             print(f"Error packing parquets: {e}", flush=True)
         else:
             print(
-                f"[{datetime.utcnow().strftime('%Y-%m-%dT%H:%M:%SZ')}] No date partitioned files found in centcom. Waiting...",
+                f"[{datetime.utcnow().strftime('%Y-%m-%dT%H:%M:%SZ')}] No date partitioned files found in the bucket. Waiting...",
                 flush=True,
             )
 
