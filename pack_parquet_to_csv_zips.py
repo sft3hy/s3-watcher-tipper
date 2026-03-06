@@ -152,14 +152,22 @@ def list_s3_parquet(bucket: str, prefix: str):
 def read_s3_parquet_chunks(bucket: str, key: str):
     import boto3
     import pyarrow.parquet as pq
+    import tempfile
+    import os
 
     s3 = boto3.client("s3")
-    response = s3.get_object(Bucket=bucket, Key=key)
 
-    # We can read the Parquet file sequentially using pyarrow
-    with pq.ParquetFile(response["Body"]) as pf:
-        for batch in pf.iter_batches():
-            yield batch.to_pandas()
+    fd, tmp_path = tempfile.mkstemp(suffix=".parquet")
+    os.close(fd)
+
+    try:
+        s3.download_file(bucket, key, tmp_path)
+        with pq.ParquetFile(tmp_path) as pf:
+            for batch in pf.iter_batches():
+                yield batch.to_pandas()
+    finally:
+        if os.path.exists(tmp_path):
+            os.remove(tmp_path)
 
 
 def list_local_parquet(root: str):
