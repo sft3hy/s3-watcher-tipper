@@ -1351,26 +1351,43 @@ boot();
 
 
 def load_from_clickhouse(host: str) -> dict:
-    print(f"[+] Connecting to ClickHouse at {host}:8123...")
-    client = clickhouse_connect.get_client(host=host, port=8123)
+    import time
 
-    # Check if table exists
-    try:
-        tables = client.query("SHOW TABLES").result_rows
-        if not any(t[0] == "sigint_data" for t in tables):
+    print(f"[+] Connecting to ClickHouse at {host}:8123...")
+
+    client = None
+    for attempt in range(1, 21):
+        try:
+            client = clickhouse_connect.get_client(host=host, port=8123)
+            # Check if table exists
+            tables = client.query("SHOW TABLES").result_rows
+            break
+        except Exception as e:
             print(
-                "[-] ClickHouse table 'sigint_data' does not exist yet. Using empty DataFrame."
+                f"[-] ClickHouse or network not ready yet (attempt {attempt}/20): {e}",
+                flush=True,
             )
-            df = pd.DataFrame()
-        else:
-            print("[+] Querying sigint_data table...")
-            # Querying everything into Pandas. For gigabytes this is heavy, but it mirrors previous CSV logic.
-            # In a real heavy dashboard we'd push the aggregations to DB queries, but this satisfies the requirement to reuse fusion engine.
-            df = client.query_df("SELECT * FROM sigint_data")
-            print(f"[+] Pulled {len(df):,} rows from ClickHouse")
-    except Exception as e:
-        print(f"[-] Error querying ClickHouse: {e}")
+            time.sleep(5)
+
+    if not client:
+        print(
+            "[-] Could not connect to ClickHouse after 20 attempts. Using empty DataFrame."
+        )
         df = pd.DataFrame()
+    else:
+        try:
+            if not any(t[0] == "sigint_data" for t in tables):
+                print(
+                    "[-] ClickHouse table 'sigint_data' does not exist yet. Using empty DataFrame."
+                )
+                df = pd.DataFrame()
+            else:
+                print("[+] Querying sigint_data table...")
+                df = client.query_df("SELECT * FROM sigint_data")
+                print(f"[+] Pulled {len(df):,} rows from ClickHouse")
+        except Exception as e:
+            print(f"[-] Error querying ClickHouse: {e}")
+            df = pd.DataFrame()
 
     # Parse timestamps
     for col in ["event_time", "first_seen", "last_seen"]:

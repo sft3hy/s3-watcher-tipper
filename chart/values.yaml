@@ -88,3 +88,4 @@ ingress:
 clickhouse:
   enabled: true
   storage: 10Gi
+  storageClass: "cosmichorizon-ebs-gp3"
