@@ -129,8 +129,11 @@ def process_parquet_file(bucket, key):
         # Continuously sync new items to ClickHouse
         if CLICKHOUSE_ENABLED and CLICKHOUSE_HOST:
             try:
+                user = os.environ.get("CLICKHOUSE_USER", "default")
+                password = os.environ.get("CLICKHOUSE_PASSWORD", "")
                 url = f"http://{CLICKHOUSE_HOST}:8123/?query=INSERT INTO sigint_data FORMAT CSVWithNames"
-                response = requests.post(url, data=csv_data.encode("utf-8"))
+                auth = (user, password) if user else None
+                response = requests.post(url, data=csv_data.encode("utf-8"), auth=auth)
                 if response.status_code == 200:
                     print(
                         f"[{now}] Successfully pushed {filename} (live sync) to ClickHouse.",

@@ -89,3 +89,5 @@ clickhouse:
   enabled: true
   storage: 10Gi
   storageClass: "cosmichorizon-ebs-sc"
+  user: "admin"
+  password: "admin123"

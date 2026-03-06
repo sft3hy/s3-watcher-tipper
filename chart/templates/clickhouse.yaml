@@ -32,6 +32,10 @@ spec:
               key: aws-secret-access-key
         - name: AWS_REGION
           value: {{ .Values.aws.region | quote }}
+        - name: CLICKHOUSE_USER
+          value: {{ .Values.clickhouse.user | quote }}
+        - name: CLICKHOUSE_PASSWORD
+          value: {{ .Values.clickhouse.password | quote }}
         ports:
         - containerPort: 8123
         - containerPort: 9000

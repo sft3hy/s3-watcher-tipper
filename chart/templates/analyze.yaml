@@ -28,6 +28,10 @@ spec:
           env:
             - name: CLICKHOUSE_HOST
               value: {{ include "s3-watcher.fullname" . }}-clickhouse
+            - name: CLICKHOUSE_USER
+              value: {{ .Values.clickhouse.user | quote }}
+            - name: CLICKHOUSE_PASSWORD
+              value: {{ .Values.clickhouse.password | quote }}
           ports:
             - containerPort: 8000
           resources:

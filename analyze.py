@@ -1353,12 +1353,16 @@ boot();
 def load_from_clickhouse(host: str) -> dict:
     import time
 
-    print(f"[+] Connecting to ClickHouse at {host}:8123...")
+    user = os.environ.get("CLICKHOUSE_USER", "default")
+    password = os.environ.get("CLICKHOUSE_PASSWORD", "")
+    print(f"[+] Connecting to ClickHouse at {host}:8123 as {user}...")
 
     client = None
     for attempt in range(1, 21):
         try:
-            client = clickhouse_connect.get_client(host=host, port=8123)
+            client = clickhouse_connect.get_client(
+                host=host, port=8123, username=user, password=password
+            )
             # Check if table exists
             tables = client.query("SHOW TABLES").result_rows
             break

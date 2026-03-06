@@ -23,11 +23,15 @@ spec:
           value: {{ .Values.s3.bucketName | quote }}
         - name: S3_PREFIX
           value: {{ .Values.s3.prefix | quote }}
+        - name: CLICKHOUSE_USER
+          value: {{ .Values.clickhouse.user | quote }}
+        - name: CLICKHOUSE_PASSWORD
+          value: {{ .Values.clickhouse.password | quote }}
         command:
         - /bin/sh
         - -c
         - |
-          while ! clickhouse-client --host $CLICKHOUSE_HOST --query "SELECT 1" > /dev/null 2>&1; do
+          while ! clickhouse-client --host $CLICKHOUSE_HOST --user $CLICKHOUSE_USER --password $CLICKHOUSE_PASSWORD --query "SELECT 1" > /dev/null 2>&1; do
             echo "Waiting for ClickHouse to start..."
             sleep 5
           done
@@ -36,8 +40,8 @@ spec:
           S3_URI="https://${S3_BUCKET_NAME}.s3.${AWS_REGION}.amazonaws.com/${S3_PREFIX}**/*.parquet"
           
           # We use clickhouse native S3 credentials (inherited by the server process)
-          clickhouse-client --host $CLICKHOUSE_HOST --query="
-            CREATE TABLE IF NOT EXISTS sigint_data 
+          clickhouse-client --host $CLICKHOUSE_HOST --user $CLICKHOUSE_USER --password $CLICKHOUSE_PASSWORD --query="
+            CREATE TABLE IF NOT EXISTS sigint_data  
             ENGINE = MergeTree 
             ORDER BY tuple() 
             SETTINGS schema_inference_make_columns_nullable=1 
