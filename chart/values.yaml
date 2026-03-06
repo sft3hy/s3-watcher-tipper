@@ -23,11 +23,11 @@ credentials:
 
 resources:
   requests:
-    cpu: 100m
-    memory: 256Mi
-  limits:
     cpu: 500m
     memory: 1Gi
+  limits:
+    cpu: 1000m
+    memory: 2Gi
 
 # Number of replicas — keep at 1 to avoid duplicate log output
 replicaCount: 1
