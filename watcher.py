@@ -6,7 +6,8 @@ import json
 import pandas as pd
 import logging
 from datetime import datetime, timedelta
-from cs_helpers import send_public_message
+
+from pack_parquet_to_csv_zips import pack
 
 # ── Configuration (from environment variables) ────────────────────────────────
 AWS_ACCESS_KEY_ID = os.environ["AWS_ACCESS_KEY_ID"].strip()
@@ -119,7 +120,7 @@ def process_parquet_file(bucket, key):
                 )
             else:
                 message = f"File: `{filename}`\n```csv\n{chunk}```"
-            send_public_message(roomName="sams_test_room", message=message)
+            print(f"Would have sent to ChatSurfer: {filename} Part {i+1}", flush=True)
 
         os.remove(tmp_path)
         print(
@@ -162,7 +163,7 @@ def check_for_changes(bucket, prefix, previous_state):
                 content = read_object(bucket, key)
                 print(content, flush=True)
                 message_text = f"New file: {key}\n\n{content}"
-                send_public_message(roomName="atreides_data", message=message_text)
+                print(f"Would have sent to ChatSurfer: {key}", flush=True)
             except Exception as e:
                 print(f"  [error reading file: {e}]", flush=True)
 
@@ -205,9 +206,26 @@ if __name__ == "__main__":
                     f"[{datetime.utcnow().strftime('%Y-%m-%dT%H:%M:%SZ')}] Found {len(current_state)} object(s) in centcom for most recent day ({most_recent_date}). Processing...",
                     flush=True,
                 )
-                for key in sorted(current_state.keys()):
-                    if key.endswith(".parquet"):
-                        process_parquet_file(BUCKET_NAME, key)
+
+                parquet_keys = [
+                    k for k in current_state.keys() if k.endswith(".parquet")
+                ]
+                if parquet_keys:
+
+                    def files_iter():
+                        for key in sorted(parquet_keys):
+                            rel_path = key[len(PREFIX) :].lstrip("/")
+                            yield key, rel_path
+
+                    try:
+                        pack(
+                            files_iter(),
+                            output_dir="/tmp/zips",
+                            source_label="s3",
+                            bucket=BUCKET_NAME,
+                        )
+                    except Exception as e:
+                        print(f"Error packing parquets: {e}", flush=True)
             else:
                 print(
                     f"[{datetime.utcnow().strftime('%Y-%m-%dT%H:%M:%SZ')}] Already processed data for {most_recent_date}. Waiting for next day...",
