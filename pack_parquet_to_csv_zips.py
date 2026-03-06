@@ -149,14 +149,17 @@ def list_s3_parquet(bucket: str, prefix: str):
                 yield key, rel
 
 
-def read_s3_parquet(bucket: str, key: str) -> pd.DataFrame:
+def read_s3_parquet_chunks(bucket: str, key: str):
     import boto3
+    import pyarrow.parquet as pq
 
     s3 = boto3.client("s3")
-    buf = io.BytesIO()
-    s3.download_fileobj(bucket, key, buf)
-    buf.seek(0)
-    return pd.read_parquet(buf)
+    response = s3.get_object(Bucket=bucket, Key=key)
+
+    # We can read the Parquet file sequentially using pyarrow
+    with pq.ParquetFile(response["Body"]) as pf:
+        for batch in pf.iter_batches():
+            yield batch.to_pandas()
 
 
 def list_local_parquet(root: str):
@@ -166,16 +169,20 @@ def list_local_parquet(root: str):
         yield str(p), str(p.relative_to(root_path))
 
 
-def read_local_parquet(path: str) -> pd.DataFrame:
-    return pd.read_parquet(path)
+def read_local_parquet_chunks(path: str):
+    import pyarrow.parquet as pq
+
+    with pq.ParquetFile(path) as pf:
+        for batch in pf.iter_batches():
+            yield batch.to_pandas()
 
 
 # ── CSV conversion ─────────────────────────────────────────────────────────────
 
 
-def parquet_to_csv_bytes(df: pd.DataFrame) -> bytes:
+def frame_to_csv_bytes(df: pd.DataFrame, header: bool) -> bytes:
     buf = io.StringIO()
-    df.to_csv(buf, index=False)
+    df.to_csv(buf, index=False, header=header)
     return buf.getvalue().encode("utf-8")
 
 
@@ -238,29 +245,39 @@ def pack(files_iter, output_dir: str, source_label: str, bucket: str = None):
 
     total_files = 0
     for source_ref, rel in files_iter:
+
+        # We need to know the initial file sizes to estimate if we must roll-over first
+        current_zip_size = 0 if not zf else zf.fp.tell()
+
         try:
             if source_label == "s3":
-                df = read_s3_parquet(bucket, source_ref)
+                chunks_iter = read_s3_parquet_chunks(bucket, source_ref)
             else:
-                df = read_local_parquet(source_ref)
+                chunks_iter = read_local_parquet_chunks(source_ref)
         except Exception as e:
             print(f"  ⚠  Skipping {rel}: {e}", file=sys.stderr)
             continue
 
-        csv_data = parquet_to_csv_bytes(df)
         csv_arc_path = rel_parquet_to_csv(rel)
-        csv_size = len(csv_data)
 
-        zf.writestr(csv_arc_path, csv_data)
+        written_bytes = 0
+        with zf.open(csv_arc_path, "w") as current_file:
+            first_chunk = True
+            for chunk_df in chunks_iter:
+                csv_data = frame_to_csv_bytes(chunk_df, header=first_chunk)
+                current_file.write(csv_data)
+                written_bytes += len(csv_data)
+                first_chunk = False
+
         zip_count += 1
         total_files += 1
 
-        current_zip_size = zf.fp.tell()
+        new_zip_size = zf.fp.tell()
         print(
-            f"  + [zip {zip_index-1:02d}] {csv_arc_path}  (uncompressed: {csv_size/1024:.1f} KB, zip is now {current_zip_size/1024/1024:.1f} MB)"
+            f"  + [zip {zip_index-1:02d}] {csv_arc_path}  (uncompressed: {written_bytes/1024:.1f} KB, zip is now {new_zip_size/1024/1024:.1f} MB)"
         )
 
-        if current_zip_size >= MAX_ZIP_BYTES:
+        if new_zip_size >= MAX_ZIP_BYTES:
             open_new_zip()
 
     if zf:
