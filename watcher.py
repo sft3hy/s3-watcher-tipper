@@ -56,7 +56,7 @@ s3 = boto3.client(
 )
 
 
-def get_most_recent_day_objects(bucket, prefix=""):
+def get_all_day_objects(bucket, prefix=""):
     import re
 
     objects_by_date = {}
@@ -76,11 +76,7 @@ def get_most_recent_day_objects(bucket, prefix=""):
                     objects_by_date[date_str] = {}
                 objects_by_date[date_str][key] = obj["ETag"]
 
-    if not objects_by_date:
-        return None, {}
-
-    most_recent_date = max(objects_by_date.keys())
-    return most_recent_date, objects_by_date[most_recent_date]
+    return objects_by_date
 
 
 def process_parquet_file(bucket, key):
@@ -194,43 +190,38 @@ if __name__ == "__main__":
     states = {}
 
     while True:
-        most_recent_date, current_state = get_most_recent_day_objects(
-            BUCKET_NAME, PREFIX
-        )
+        objects_by_date = get_all_day_objects(BUCKET_NAME, PREFIX)
 
-        if most_recent_date:
-            state_key = f"processed_{most_recent_date}"
-            if state_key not in states:
-                states[state_key] = current_state
-                print(
-                    f"[{datetime.utcnow().strftime('%Y-%m-%dT%H:%M:%SZ')}] Found {len(current_state)} object(s) in centcom for most recent day ({most_recent_date}). Processing...",
-                    flush=True,
-                )
+        if objects_by_date:
+            for date_str in sorted(objects_by_date.keys()):
+                current_state = objects_by_date[date_str]
+                state_key = f"processed_{date_str}"
+                if state_key not in states:
+                    states[state_key] = current_state
+                    print(
+                        f"[{datetime.utcnow().strftime('%Y-%m-%dT%H:%M:%SZ')}] Found {len(current_state)} object(s) in centcom for day ({date_str}). Processing...",
+                        flush=True,
+                    )
 
-                parquet_keys = [
-                    k for k in current_state.keys() if k.endswith(".parquet")
-                ]
-                if parquet_keys:
+                    parquet_keys = [
+                        k for k in current_state.keys() if k.endswith(".parquet")
+                    ]
+                    if parquet_keys:
 
-                    def files_iter():
-                        for key in sorted(parquet_keys):
-                            rel_path = key[len(PREFIX) :].lstrip("/")
-                            yield key, rel_path
+                        def files_iter(keys):
+                            for key in sorted(keys):
+                                rel_path = key[len(PREFIX) :].lstrip("/")
+                                yield key, rel_path
 
-                    try:
-                        pack(
-                            files_iter(),
-                            output_dir="/tmp/zips",
-                            source_label="s3",
-                            bucket=BUCKET_NAME,
-                        )
-                    except Exception as e:
-                        print(f"Error packing parquets: {e}", flush=True)
-            else:
-                print(
-                    f"[{datetime.utcnow().strftime('%Y-%m-%dT%H:%M:%SZ')}] Already processed data for {most_recent_date}. Waiting for next day...",
-                    flush=True,
-                )
+                        try:
+                            pack(
+                                files_iter(parquet_keys),
+                                output_dir="/tmp/zips",
+                                source_label="s3",
+                                bucket=BUCKET_NAME,
+                            )
+                        except Exception as e:
+                            print(f"Error packing parquets: {e}", flush=True)
         else:
             print(
                 f"[{datetime.utcnow().strftime('%Y-%m-%dT%H:%M:%SZ')}] No date partitioned files found in centcom. Waiting...",

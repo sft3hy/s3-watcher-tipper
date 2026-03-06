@@ -36,7 +36,7 @@ from pathlib import Path, PurePosixPath
 import pandas as pd
 
 # ── Tuneable limits ────────────────────────────────────────────────────────────
-MAX_ZIPS = 6
+MAX_ZIPS = 1000
 MAX_ZIP_BYTES = 500 * 1024 * 1024  # 500 MB limit for actual zip size
 # ──────────────────────────────────────────────────────────────────────────────
 
