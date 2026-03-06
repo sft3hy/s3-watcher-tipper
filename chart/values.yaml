@@ -88,4 +88,4 @@ ingress:
 clickhouse:
   enabled: true
   storage: 10Gi
-  storageClass: "cosmichorizon-ebs"
+  storageClass: "cosmichorizon-ebs-sc"
