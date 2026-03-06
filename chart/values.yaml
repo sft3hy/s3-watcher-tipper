@@ -32,6 +32,12 @@ resources:
 # Number of replicas — keep at 1 to avoid duplicate log output
 replicaCount: 1
 
+watcher:
+  enabled: false
+
+ingestionJob:
+  enabled: false
+
 nodeSelector: {}
 tolerations: []
 affinity: {}
