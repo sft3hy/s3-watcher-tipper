@@ -4,17 +4,48 @@ import os
 import tempfile
 import json
 import pandas as pd
+import logging
 from datetime import datetime, timedelta
 from cs_helpers import send_public_message
 
 # ── Configuration (from environment variables) ────────────────────────────────
-AWS_ACCESS_KEY_ID = os.environ["AWS_ACCESS_KEY_ID"]
-AWS_SECRET_ACCESS_KEY = os.environ["AWS_SECRET_ACCESS_KEY"]
+AWS_ACCESS_KEY_ID = os.environ["AWS_ACCESS_KEY_ID"].strip()
+AWS_SECRET_ACCESS_KEY = os.environ["AWS_SECRET_ACCESS_KEY"].strip()
 AWS_REGION = os.environ.get("AWS_REGION", "us-east-1")
 BUCKET_NAME = os.environ["S3_BUCKET_NAME"]
 PREFIX = os.environ.get("S3_PREFIX", "")
 POLL_INTERVAL_SECONDS = int(os.environ.get("POLL_INTERVAL_SECONDS", "86400"))
 # ─────────────────────────────────────────────────────────────────────────────
+
+# Enable verbose debugging for bottom dependencies
+boto3.set_stream_logger("botocore", level=logging.DEBUG)
+
+print("\n" + "=" * 50, flush=True)
+print("=== S3 SETUP DEBUGGING ===", flush=True)
+print(f"AWS_REGION: {AWS_REGION}", flush=True)
+print(f"BUCKET_NAME: {BUCKET_NAME}", flush=True)
+print(f"PREFIX: '{PREFIX}'", flush=True)
+print(
+    f"AWS_ACCESS_KEY_ID length: {len(AWS_ACCESS_KEY_ID)} (ends with: {AWS_ACCESS_KEY_ID[-4:] if len(AWS_ACCESS_KEY_ID) > 4 else '?'})",
+    flush=True,
+)
+print(f"AWS_SECRET_ACCESS_KEY length: {len(AWS_SECRET_ACCESS_KEY)}", flush=True)
+
+try:
+    sts = boto3.client(
+        "sts",
+        aws_access_key_id=AWS_ACCESS_KEY_ID,
+        aws_secret_access_key=AWS_SECRET_ACCESS_KEY,
+        region_name=AWS_REGION,
+    )
+    identity = sts.get_caller_identity()
+    print(f"STS Caller Identity: {identity['Arn']}", flush=True)
+except Exception as e:
+    print(
+        f"STS validation failed. The keys might be invalid or STS is restricted: {e}",
+        flush=True,
+    )
+print("=" * 50 + "\n", flush=True)
 
 s3 = boto3.client(
     "s3",

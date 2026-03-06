@@ -13,7 +13,7 @@ aws:
 
 s3:
   bucketName: "atreides-gold-customer-data-prod-a1ce8606" # required
-  prefix: "clairvoyant/sample" # optional folder prefix
+  prefix: "clairvoyant/sample/" # optional folder prefix
   pollIntervalSeconds: 86400
 
 credentials:
