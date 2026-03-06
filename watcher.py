@@ -18,7 +18,7 @@ POLL_INTERVAL_SECONDS = int(os.environ.get("POLL_INTERVAL_SECONDS", "86400"))
 # ─────────────────────────────────────────────────────────────────────────────
 
 # Enable verbose debugging for bottom dependencies
-boto3.set_stream_logger("botocore", level=logging.DEBUG)
+# boto3.set_stream_logger("botocore", level=logging.DEBUG)
 
 print("\n" + "=" * 50, flush=True)
 print("=== S3 SETUP DEBUGGING ===", flush=True)
