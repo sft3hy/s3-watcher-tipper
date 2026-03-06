@@ -11,6 +11,7 @@ RUN pip install --no-cache-dir -r requirements.txt
 COPY watcher.py .
 COPY cs_helpers.py .
 COPY config.py .
+COPY pack_parquet_to_csv_zips.py .
 
 USER nobody
 

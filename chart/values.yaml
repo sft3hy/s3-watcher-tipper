@@ -18,6 +18,8 @@ s3:
 
 credentials:
   existingSecret: "signal-monitor-credentials"
+  gdrive:
+    existingSecret: "google-oauth" # Secret containing token.json and credentials.json
 
 resources:
   requests:
