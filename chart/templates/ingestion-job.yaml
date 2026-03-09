@@ -23,6 +23,16 @@ spec:
           value: {{ .Values.s3.bucketName | quote }}
         - name: S3_PREFIX
           value: {{ .Values.s3.prefix | quote }}
+        - name: AWS_ACCESS_KEY_ID
+          valueFrom:
+            secretKeyRef:
+              name: {{ include "s3-watcher.secretName" . }}
+              key: aws-access-key-id
+        - name: AWS_SECRET_ACCESS_KEY
+          valueFrom:
+            secretKeyRef:
+              name: {{ include "s3-watcher.secretName" . }}
+              key: aws-secret-access-key
         - name: CLICKHOUSE_USER
           value: {{ .Values.clickhouse.user | quote }}
         - name: CLICKHOUSE_PASSWORD
@@ -45,7 +55,7 @@ spec:
             ENGINE = MergeTree 
             ORDER BY tuple() 
             SETTINGS schema_inference_make_columns_nullable=1 
-            AS SELECT * FROM s3('${S3_URI}', 'Parquet')
+            AS SELECT * FROM s3('${S3_URI}', '${AWS_ACCESS_KEY_ID}', '${AWS_SECRET_ACCESS_KEY}', 'Parquet')
           "
           
           echo "S3 Bulk ingestion complete."

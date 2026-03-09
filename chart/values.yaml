@@ -36,7 +36,7 @@ watcher:
   enabled: false
 
 ingestionJob:
-  enabled: false
+  enabled: true
 
 nodeSelector: {}
 tolerations: []
