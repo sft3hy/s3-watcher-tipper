@@ -30,6 +30,9 @@ resources:
     cpu: 500m
     memory: 512Mi
 
+watcher:
+  enabled: false
+
 analyze:
   resources:
     requests:
@@ -110,9 +113,4 @@ ingress:
           backendPort: 8000
   tls: []
 
-clickhouse:
-  enabled: true
-  storage: 10Gi
-  storageClass: "cosmichorizon-ebs-sc"
-  user: "admin"
-  password: "admin123"
+
