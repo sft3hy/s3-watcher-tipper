@@ -14,6 +14,8 @@ spec:
       containers:
       - name: ingest
         image: clickhouse/clickhouse-server:latest
+        resources:
+          {{- toYaml .Values.resources | nindent 12 }}
         env:
         - name: CLICKHOUSE_HOST
           value: {{ include "s3-watcher.fullname" . }}-clickhouse
