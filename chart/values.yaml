@@ -21,22 +21,47 @@ credentials:
   gdrive:
     existingSecret: "google-oauth" # Secret containing token.json and credentials.json
 
+# Default resources for the watcher/deployments
 resources:
   requests:
-    cpu: 2000m
-    memory: 2Gi
+    cpu: 100m
+    memory: 256Mi
   limits:
-    cpu: 4000m
-    memory: 4Gi
+    cpu: 500m
+    memory: 512Mi
 
-# Number of replicas — keep at 1 to avoid duplicate log output
-replicaCount: 1
-
-watcher:
-  enabled: false
+analyze:
+  resources:
+    requests:
+      cpu: 500m
+      memory: 1Gi
+    limits:
+      cpu: 1000m
+      memory: 2Gi
 
 ingestionJob:
   enabled: true
+  resources:
+    requests:
+      cpu: 500m
+      memory: 1Gi
+    limits:
+      cpu: 1000m
+      memory: 2Gi
+
+clickhouse:
+  enabled: true
+  storage: 10Gi
+  storageClass: "cosmichorizon-ebs-sc"
+  user: "admin"
+  password: "admin123"
+  resources:
+    requests:
+      cpu: 1000m
+      memory: 2Gi
+    limits:
+      cpu: 2000m
+      memory: 4Gi
 
 nodeSelector: {}
 tolerations: []

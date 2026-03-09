@@ -43,12 +43,7 @@ spec:
         - name: data
           mountPath: /var/lib/clickhouse
         resources:
-          requests:
-            cpu: 1000m
-            memory: 2Gi
-          limits:
-            cpu: 4000m
-            memory: 8Gi
+          {{- toYaml .Values.clickhouse.resources | nindent 10 }}
   volumeClaimTemplates:
   - metadata:
       name: data
