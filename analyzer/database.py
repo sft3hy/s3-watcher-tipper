@@ -52,7 +52,27 @@ def load_from_clickhouse(host: str) -> dict:
                 df = pd.DataFrame()
             else:
                 print("[+] Querying sigint_data table...")
-                df = client.query_df("SELECT * FROM sigint_data")
+                # Optimized query: select only needed columns and limit to 500k rows
+                query = """
+                    SELECT 
+                        event_time, first_seen, last_seen,
+                        latitude, longitude, speed, heading, altitude,
+                        horizontal_accuracy, vertical_accuracy,
+                        event_location_accuracy_score,
+                        device_to_unit_association_score,
+                        device_at_unit_site_occupancy_metric,
+                        entity_age, entity_id, unit_id, site_id, country_code_1,
+                        unit_name, unit_echelon, unit_domain, 
+                        unit_type_level_1, unit_type_level_2,
+                        regional_command, operational_command, orbat,
+                        device_brand, platform, carrier, app_id,
+                        wifi_ssid, connected_wifi_vendor_name, ip_enrichment,
+                        meta_row_id
+                    FROM sigint_data
+                    ORDER BY event_time DESC
+                    LIMIT 500000
+                """
+                df = client.query_df(query)
                 print(f"[+] Pulled {len(df):,} rows from ClickHouse")
         except Exception as e:
             print(f"[-] Error querying ClickHouse: {e}")
