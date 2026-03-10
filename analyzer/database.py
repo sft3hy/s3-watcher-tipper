@@ -52,7 +52,9 @@ def load_from_clickhouse(host: str) -> dict:
                 df = pd.DataFrame()
             else:
                 print("[+] Querying sigint_data table...")
-                # Optimized query: select only needed columns and limit to 500k rows
+                # Exclude ip_enrichment (large JSON blob — caused OOM).
+                # Time-window filter lets ClickHouse prune partitions instead
+                # of scanning the full table before applying LIMIT.
                 query = """
                     SELECT 
                         event_time, first_seen, last_seen,
@@ -66,13 +68,16 @@ def load_from_clickhouse(host: str) -> dict:
                         unit_type_level_1, unit_type_level_2,
                         regional_command, operational_command, orbat,
                         device_brand, platform, carrier, app_id,
-                        wifi_ssid, connected_wifi_vendor_name, ip_enrichment,
+                        wifi_ssid, connected_wifi_vendor_name,
                         meta_row_id
                     FROM sigint_data
+                    WHERE event_time >= now() - INTERVAL 90 DAY
                     ORDER BY event_time DESC
-                    LIMIT 500000
+                    LIMIT 100000
                 """
-                df = client.query_df(query)
+                # max_memory_usage: 2 GiB hard cap on this query server-side
+                settings = {"max_memory_usage": 2_000_000_000}
+                df = client.query_df(query, settings=settings)
                 print(f"[+] Pulled {len(df):,} rows from ClickHouse")
         except Exception as e:
             print(f"[-] Error querying ClickHouse: {e}")
