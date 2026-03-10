@@ -23,7 +23,7 @@ from .fusion import (
 
 # Shared query settings — keep individual query memory low
 _QS = {"max_memory_usage": 1_500_000_000}  # 1.5 GiB per query
-_TIME_FILTER = "WHERE event_time >= now() - INTERVAL 90 DAY"
+_TIME_FILTER = "WHERE parseDateTimeBestEffort(event_time) >= now() - INTERVAL 90 DAY"
 _ROW_CAP = 50000
 
 
@@ -93,8 +93,8 @@ def load_from_clickhouse(host: str) -> dict:
             uniqExact(site_id)                  AS unique_sites,
             uniqExact(country_code_1)           AS countries,
             countIf(latitude IS NOT NULL AND latitude != 0) AS has_geo,
-            min(event_time)                     AS min_time,
-            max(event_time)                     AS max_time
+            min(parseDateTimeBestEffort(event_time)) AS min_time,
+            max(parseDateTimeBestEffort(event_time)) AS max_time
         FROM sigint_data
         {_TIME_FILTER}
     """,
@@ -123,7 +123,7 @@ def load_from_clickhouse(host: str) -> dict:
     df_timeline = _q(
         client,
         f"""
-        SELECT toDate(event_time) AS date, count() AS count
+        SELECT toDate(parseDateTimeBestEffort(event_time)) AS date, count() AS count
         FROM sigint_data
         {_TIME_FILTER}
         GROUP BY date ORDER BY date
@@ -296,8 +296,8 @@ def load_from_clickhouse(host: str) -> dict:
     df_heat = _q(
         client,
         f"""
-        SELECT toDayOfWeek(event_time) AS dow,
-               toHour(event_time)      AS hour,
+        SELECT toDayOfWeek(parseDateTimeBestEffort(event_time)) AS dow,
+               toHour(parseDateTimeBestEffort(event_time))      AS hour,
                count()                 AS count
         FROM sigint_data
         {_TIME_FILTER}
