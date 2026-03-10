@@ -4,7 +4,7 @@ kind: Ingress
 metadata:
   name: {{ include "s3-watcher.fullname" . }}
   labels:
-    app: {{ include "s3-watcher.name" . }}
+    {{- include "s3-watcher.labels" . | nindent 4 }}
   {{- with .Values.ingress.annotations }}
   annotations:
     {{- toYaml . | nindent 4 }}
