@@ -55,7 +55,6 @@ spec:
           clickhouse-client --host $CLICKHOUSE_HOST --user $CLICKHOUSE_USER --password $CLICKHOUSE_PASSWORD --query="
             SET schema_inference_make_columns_nullable=1;
             SET use_hive_partitioning = 0;
-            SET partition_strategy = 'wildcard';
             CREATE TABLE IF NOT EXISTS sigint_data  
             ENGINE = MergeTree 
             ORDER BY tuple() 
