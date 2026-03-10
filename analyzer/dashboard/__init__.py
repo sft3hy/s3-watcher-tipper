@@ -69,6 +69,7 @@ def build_html():
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>SIGINT DASHBOARD</title>
+    <link rel="icon" type="image/svg+xml" href="/s3-watcher/favicon.svg">
     <!-- External Dependencies -->
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />

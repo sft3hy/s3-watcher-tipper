@@ -65,6 +65,21 @@ class Handler(BaseHTTPRequestHandler):
             self.wfile.write(html.encode())
             return
 
+        if path == "/s3-watcher/favicon.svg":
+            base_dir = os.path.dirname(__file__)
+            path = os.path.join(base_dir, "dashboard", "assets", "favicon.svg")
+            if os.path.exists(path):
+                with open(path, "rb") as f:
+                    content = f.read()
+                self.send_response(200)
+                self.send_header("Content-Type", "image/svg+xml")
+                self.end_headers()
+                self.wfile.write(content)
+            else:
+                self.send_response(404)
+                self.end_headers()
+            return
+
         # ── API v1 routes ─────────────────────────────────────────────
         if path.startswith("/s3-watcher/api/v1"):
             if not self._check_api_key():
