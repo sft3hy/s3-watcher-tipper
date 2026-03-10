@@ -2,5 +2,5 @@ apiVersion: v2
 name: s3-watcher
 description: Watches an S3 bucket for changes and prints them to stdout
 type: application
-version: 0.1.29
+version: 0.1.30
 appVersion: "1.0.0"

@@ -37,7 +37,7 @@ from .fusion import (
 
 # Shared query settings — keep individual query memory low
 _QS = {"max_memory_usage": 1_500_000_000}  # 1.5 GiB per query
-_TIME_FILTER = "WHERE parseDateTimeBestEffort(event_time) >= now() - INTERVAL 90 DAY"
+_TIME_FILTER = "WHERE parseDateTimeBestEffortOrNull(toString(event_time)) >= now() - INTERVAL 90 DAY"
 _ROW_CAP = 50000
 
 
@@ -96,6 +96,17 @@ def load_from_clickhouse(host: str) -> dict:
 
     print("[+] Querying sigint_data table (multi-query mode)...")
 
+    # Get column list upfront to dynamically filter available fields
+    try:
+        col_list = [
+            r[0]
+            for r in client.query(
+                "SELECT name FROM system.columns WHERE table='sigint_data'"
+            ).result_rows
+        ]
+    except Exception:
+        col_list = []
+
     # ── 1. Summary (server-side aggregation — tiny result) ────────────
     df_summary_raw = _q(
         client,
@@ -107,8 +118,8 @@ def load_from_clickhouse(host: str) -> dict:
             uniqExact(site_id)                  AS unique_sites,
             uniqExact(country_code_1)           AS countries,
             countIf(latitude IS NOT NULL AND latitude != 0) AS has_geo,
-            min(parseDateTimeBestEffort(event_time)) AS min_time,
-            max(parseDateTimeBestEffort(event_time)) AS max_time
+            min(parseDateTimeBestEffortOrNull(toString(event_time))) AS min_time,
+            max(parseDateTimeBestEffortOrNull(toString(event_time))) AS max_time
         FROM sigint_data
         {_TIME_FILTER}
     """,
@@ -137,7 +148,7 @@ def load_from_clickhouse(host: str) -> dict:
     df_timeline = _q(
         client,
         f"""
-        SELECT toDate(parseDateTimeBestEffort(event_time)) AS date, count() AS count
+        SELECT toDate(parseDateTimeBestEffortOrNull(toString(event_time))) AS date, count() AS count
         FROM sigint_data
         {_TIME_FILTER}
         GROUP BY date ORDER BY date
@@ -160,14 +171,37 @@ def load_from_clickhouse(host: str) -> dict:
         timeline = []
 
     # ── 3. Geo (only lat/lon + a few labels, sampled) ─────────────────
+    geo_cols = [
+        "latitude",
+        "longitude",
+        "entity_id",
+        "entity_type",
+        "entity_age",
+        "unit_name",
+        "speed",
+        "heading",
+        "altitude",
+        "horizontal_accuracy",
+        "event_location_accuracy_score",
+        "isp_name",
+        "satellite_provider",
+        "carrier",
+        "wifi_ssid",
+        "device_brand",
+        "device_model",
+        "platform",
+        "device_os",
+        "country_code",
+        "event_time",
+    ]
+    geo_present = [c for c in geo_cols if c in col_list]
+    if not geo_present:
+        geo_present = ["*"]
+
     df_geo = _q(
         client,
         f"""
-        SELECT latitude, longitude, entity_id, entity_type, entity_age,
-               unit_name, speed, heading, altitude, horizontal_accuracy,
-               event_location_accuracy_score, isp_name, satellite_provider,
-               carrier, wifi_ssid, device_brand, device_model, platform,
-               device_os, country_code, event_time
+        SELECT {', '.join(geo_present)}
         FROM sigint_data
         {_TIME_FILTER}
           AND latitude IS NOT NULL AND longitude IS NOT NULL
@@ -193,7 +227,7 @@ def load_from_clickhouse(host: str) -> dict:
         "orbat",
     ]
     units_out = {}
-    for col in unit_cols:
+    for col in [c for c in unit_cols if c in col_list]:
         df_uc = _q(
             client,
             f"""
@@ -249,7 +283,9 @@ def load_from_clickhouse(host: str) -> dict:
 
     # ── 5. Devices (value counts — push into CH) ─────────────────────
     devices_out = {}
-    for col in ["device_brand", "platform", "carrier", "app_id"]:
+    for col in [
+        c for c in ["device_brand", "platform", "carrier", "app_id"] if c in col_list
+    ]:
         df_dc = _q(
             client,
             f"""
@@ -269,20 +305,22 @@ def load_from_clickhouse(host: str) -> dict:
             ]
 
     # Platform × brand matrix
-    df_pb = _q(
-        client,
-        f"""
-        SELECT platform, device_brand, count() AS cnt
-        FROM sigint_data
-        {_TIME_FILTER}
-          AND platform IS NOT NULL AND platform != ''
-          AND device_brand IS NOT NULL AND device_brand != ''
-        GROUP BY platform, device_brand
-        ORDER BY cnt DESC
-        LIMIT 100
-    """,
-        "devices/platform_brand",
-    )
+    df_pb = pd.DataFrame()
+    if "platform" in col_list and "device_brand" in col_list:
+        df_pb = _q(
+            client,
+            f"""
+            SELECT platform, device_brand, count() AS cnt
+            FROM sigint_data
+            {_TIME_FILTER}
+              AND platform IS NOT NULL AND platform != ''
+              AND device_brand IS NOT NULL AND device_brand != ''
+            GROUP BY platform, device_brand
+            ORDER BY cnt DESC
+            LIMIT 100
+        """,
+            "devices/platform_brand",
+        )
     if not df_pb.empty:
         ct = df_pb.pivot_table(
             index="platform", columns="device_brand", values="cnt", fill_value=0
@@ -313,8 +351,8 @@ def load_from_clickhouse(host: str) -> dict:
     df_heat = _q(
         client,
         f"""
-        SELECT toDayOfWeek(parseDateTimeBestEffort(event_time)) AS dow,
-               toHour(parseDateTimeBestEffort(event_time))      AS hour,
+        SELECT toDayOfWeek(parseDateTimeBestEffortOrNull(toString(event_time))) AS dow,
+               toHour(parseDateTimeBestEffortOrNull(toString(event_time)))      AS hour,
                count()                 AS count
         FROM sigint_data
         {_TIME_FILTER}
@@ -362,13 +400,25 @@ def load_from_clickhouse(host: str) -> dict:
         associations = []
 
     # ── 9. Anomalies (targeted small queries) ─────────────────────────
+    anom_cols = [
+        "entity_id",
+        "unit_name",
+        "speed",
+        "latitude",
+        "longitude",
+        "event_location_accuracy_score",
+        "device_to_unit_association_score",
+        "meta_row_id",
+        "event_time",
+    ]
+    anom_present = [c for c in anom_cols if c in col_list]
+    if not anom_present:
+        anom_present = ["*"]
+
     df_anom = _q(
         client,
         f"""
-        SELECT entity_id, unit_name, speed, latitude, longitude,
-               event_location_accuracy_score,
-               device_to_unit_association_score,
-               meta_row_id, event_time
+        SELECT {', '.join(anom_present)}
         FROM sigint_data
         {_TIME_FILTER}
         LIMIT {_ROW_CAP}
@@ -437,17 +487,6 @@ def load_from_clickhouse(host: str) -> dict:
     dwell = fuse_dwell(df_behavioral) if not df_behavioral.empty else []
 
     # ── 12. Multi-domain (check which columns exist) ──────────────────
-    # Get column list from ClickHouse to know what domains are available
-    try:
-        col_list = [
-            r[0]
-            for r in client.query(
-                "SELECT name FROM system.columns WHERE table='sigint_data'"
-            ).result_rows
-        ]
-    except Exception:
-        col_list = []
-
     # Maritime
     maritime_cols = ["mmsi", "imo", "vessel_name", "flag_state", "ship_type"]
     maritime_present = [c for c in maritime_cols if c in col_list]
