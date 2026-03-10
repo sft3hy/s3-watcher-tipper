@@ -12,6 +12,20 @@ from .fusion import (
     fuse_associations,
     fuse_anomalies,
     fuse_network,
+    fuse_colocation,
+    fuse_cotravel,
+    fuse_conetwork,
+    fuse_geofence,
+    fuse_dwell,
+    fuse_maritime,
+    fuse_aviation,
+    fuse_cyber,
+    fuse_rf,
+    fuse_osint,
+    fuse_skytrace,
+    geocode_summary,
+    fuse_translation,
+    df_to_records,
 )
 
 # ---------------------------------------------------------------------------
@@ -392,6 +406,135 @@ def load_from_clickhouse(host: str) -> dict:
                 for _, row in df_nc.iterrows()
             ]
 
+    # ── 11. Behavioral analytics (co-location / co-travel / dwell) ────
+    df_behavioral = _q(
+        client,
+        f"""
+        SELECT entity_id, latitude, longitude, event_time,
+               wifi_ssid, carrier
+        FROM sigint_data
+        {_TIME_FILTER}
+          AND entity_id IS NOT NULL
+          AND latitude IS NOT NULL AND longitude IS NOT NULL
+        ORDER BY rand()
+        LIMIT 20000
+    """,
+        "behavioral",
+    )
+    _coerce_timestamps(df_behavioral, ["event_time"])
+    _coerce_numerics(df_behavioral, ["latitude", "longitude"])
+    colocation = fuse_colocation(df_behavioral) if not df_behavioral.empty else []
+    cotravel = fuse_cotravel(df_behavioral) if not df_behavioral.empty else []
+    conetwork = fuse_conetwork(df_behavioral) if not df_behavioral.empty else []
+    geofence = (
+        fuse_geofence(df_behavioral)
+        if not df_behavioral.empty
+        else {"zones": [], "events": []}
+    )
+    dwell = fuse_dwell(df_behavioral) if not df_behavioral.empty else []
+
+    # ── 12. Multi-domain (check which columns exist) ──────────────────
+    # Get column list from ClickHouse to know what domains are available
+    try:
+        col_list = [
+            r[0]
+            for r in client.query(
+                "SELECT name FROM system.columns WHERE table='sigint_data'"
+            ).result_rows
+        ]
+    except Exception:
+        col_list = []
+
+    # Maritime
+    maritime_cols = ["mmsi", "imo", "vessel_name", "flag_state", "ship_type"]
+    maritime_present = [c for c in maritime_cols if c in col_list]
+    maritime_out = {"_has_data": False}
+    if maritime_present:
+        df_mar = _q(
+            client,
+            f"SELECT {', '.join(maritime_present)} FROM sigint_data {_TIME_FILTER} LIMIT {_ROW_CAP}",
+            "maritime",
+        )
+        maritime_out = (
+            fuse_maritime(df_mar) if not df_mar.empty else {"_has_data": False}
+        )
+
+    # Aviation
+    aviation_cols = ["icao24", "callsign", "flight_number", "squawk"]
+    aviation_present = [c for c in aviation_cols if c in col_list]
+    aviation_out = {"_has_data": False}
+    if aviation_present:
+        df_avi = _q(
+            client,
+            f"SELECT {', '.join(aviation_present)} FROM sigint_data {_TIME_FILTER} LIMIT {_ROW_CAP}",
+            "aviation",
+        )
+        aviation_out = (
+            fuse_aviation(df_avi) if not df_avi.empty else {"_has_data": False}
+        )
+
+    # Cyber
+    cyber_cols = [
+        "ip_address",
+        "domain",
+        "user_agent",
+        "threat_category",
+        "threat_score",
+    ]
+    cyber_present = [c for c in cyber_cols if c in col_list]
+    cyber_out = {"_has_data": False}
+    if cyber_present:
+        df_cyb = _q(
+            client,
+            f"SELECT {', '.join(cyber_present)} FROM sigint_data {_TIME_FILTER} LIMIT {_ROW_CAP}",
+            "cyber",
+        )
+        cyber_out = fuse_cyber(df_cyb) if not df_cyb.empty else {"_has_data": False}
+
+    # RF
+    rf_cols = ["frequency_mhz", "modulation", "emitter_id", "signal_strength"]
+    rf_present = [c for c in rf_cols if c in col_list]
+    rf_out = {"_has_data": False}
+    if rf_present:
+        df_rf = _q(
+            client,
+            f"SELECT {', '.join(rf_present)} FROM sigint_data {_TIME_FILTER} LIMIT {_ROW_CAP}",
+            "rf",
+        )
+        rf_out = fuse_rf(df_rf) if not df_rf.empty else {"_has_data": False}
+
+    # OSINT
+    osint_cols = ["source_url", "source_platform", "language", "sentiment_score"]
+    osint_present = [c for c in osint_cols if c in col_list]
+    osint_out = {"_has_data": False}
+    if osint_present:
+        df_os = _q(
+            client,
+            f"SELECT {', '.join(osint_present)} FROM sigint_data {_TIME_FILTER} LIMIT {_ROW_CAP}",
+            "osint",
+        )
+        osint_out = fuse_osint(df_os) if not df_os.empty else {"_has_data": False}
+
+    # ── 13. SKYTRACE (satellite ISP) ──────────────────────────────────
+    skytrace_cols = ["isp_name", "connection_type", "satellite_provider", "entity_id"]
+    skytrace_present = [c for c in skytrace_cols if c in col_list]
+    skytrace_out = {"_has_data": False}
+    if len(skytrace_present) > 1:
+        df_sky = _q(
+            client,
+            f"SELECT {', '.join(skytrace_present)} FROM sigint_data {_TIME_FILTER} LIMIT {_ROW_CAP}",
+            "skytrace",
+        )
+        skytrace_out = (
+            fuse_skytrace(df_sky) if not df_sky.empty else {"_has_data": False}
+        )
+
+    # ── 14. Geocode summary ───────────────────────────────────────────
+    geocode = geocode_summary(df_geo) if not df_geo.empty else []
+
+    # ── 15. Translation stubs ─────────────────────────────────────────
+    translation_out = {"_has_data": False}
+
     print("[+] All queries complete.")
 
     return {
@@ -405,6 +548,19 @@ def load_from_clickhouse(host: str) -> dict:
         "associations": associations,
         "anomalies": anomalies,
         "network": network_out,
+        "colocation": colocation,
+        "cotravel": cotravel,
+        "conetwork": conetwork,
+        "geofence": geofence,
+        "dwell": dwell,
+        "maritime": maritime_out,
+        "aviation": aviation_out,
+        "cyber": cyber_out,
+        "rf": rf_out,
+        "osint": osint_out,
+        "skytrace": skytrace_out,
+        "geocode": geocode,
+        "translation": translation_out,
     }
 
 
@@ -422,4 +578,17 @@ def _empty_result():
         "associations": [],
         "anomalies": [],
         "network": {},
+        "colocation": [],
+        "cotravel": [],
+        "conetwork": [],
+        "geofence": {"zones": [], "events": []},
+        "dwell": [],
+        "maritime": {"_has_data": False},
+        "aviation": {"_has_data": False},
+        "cyber": {"_has_data": False},
+        "rf": {"_has_data": False},
+        "osint": {"_has_data": False},
+        "skytrace": {"_has_data": False},
+        "geocode": [],
+        "translation": {"_has_data": False},
     }

@@ -364,6 +364,505 @@ def fuse_network(df):
     return out
 
 
+# ---------------------------------------------------------------------------
+# ── Behavioral Analytics ──────────────────────────────────────────────────
+# ---------------------------------------------------------------------------
+
+
+def _haversine_km(lat1, lon1, lat2, lon2):
+    """Vectorised haversine distance in km."""
+    R = 6371.0
+    lat1, lon1, lat2, lon2 = map(np.radians, [lat1, lon1, lat2, lon2])
+    dlat = lat2 - lat1
+    dlon = lon2 - lon1
+    a = np.sin(dlat / 2) ** 2 + np.cos(lat1) * np.cos(lat2) * np.sin(dlon / 2) ** 2
+    return R * 2 * np.arcsin(np.sqrt(a))
+
+
+def fuse_colocation(df):
+    """Detect entity pairs co-located within ~100 m / 30 min."""
+    needed = {"entity_id", "latitude", "longitude", "event_time"}
+    if not needed.issubset(df.columns):
+        return []
+    sub = df[list(needed)].dropna().sort_values("event_time")
+    if len(sub) > 20000:
+        sub = sub.sample(20000, random_state=42)
+    if len(sub) < 2:
+        return []
+
+    # Round lat/lon to ~100 m grid cells and time to 30 min buckets
+    sub = sub.copy()
+    sub["grid_lat"] = (sub["latitude"] * 100).round().astype(int)
+    sub["grid_lon"] = (sub["longitude"] * 100).round().astype(int)
+    sub["time_bucket"] = sub["event_time"].dt.floor("30min")
+
+    grouped = sub.groupby(["grid_lat", "grid_lon", "time_bucket"])["entity_id"].apply(
+        set
+    )
+    pairs = {}
+    for entities in grouped:
+        if len(entities) < 2 or len(entities) > 20:
+            continue
+        elist = sorted(entities)
+        for i in range(len(elist)):
+            for j in range(i + 1, len(elist)):
+                key = (elist[i], elist[j])
+                pairs[key] = pairs.get(key, 0) + 1
+
+    top = sorted(pairs.items(), key=lambda x: -x[1])[:50]
+    return [{"entity_a": a, "entity_b": b, "co_events": c} for (a, b), c in top]
+
+
+def fuse_cotravel(df):
+    """Entity pairs co-located at ≥3 distinct locations."""
+    needed = {"entity_id", "latitude", "longitude"}
+    if not needed.issubset(df.columns):
+        return []
+    sub = df[list(needed)].dropna()
+    if len(sub) > 20000:
+        sub = sub.sample(20000, random_state=42)
+    if len(sub) < 2:
+        return []
+
+    sub = sub.copy()
+    sub["grid_lat"] = (sub["latitude"] * 100).round().astype(int)
+    sub["grid_lon"] = (sub["longitude"] * 100).round().astype(int)
+    sub["grid"] = sub["grid_lat"].astype(str) + "," + sub["grid_lon"].astype(str)
+
+    grouped = sub.groupby("grid")["entity_id"].apply(set)
+    pair_locations = {}
+    for grid_cell, entities in grouped.items():
+        if len(entities) < 2 or len(entities) > 20:
+            continue
+        elist = sorted(entities)
+        for i in range(len(elist)):
+            for j in range(i + 1, len(elist)):
+                key = (elist[i], elist[j])
+                if key not in pair_locations:
+                    pair_locations[key] = set()
+                pair_locations[key].add(grid_cell)
+
+    cotravel = {k: len(v) for k, v in pair_locations.items() if len(v) >= 3}
+    top = sorted(cotravel.items(), key=lambda x: -x[1])[:50]
+    return [{"entity_a": a, "entity_b": b, "shared_locations": c} for (a, b), c in top]
+
+
+def fuse_conetwork(df):
+    """Entities sharing same WiFi SSID or carrier at the same site."""
+    out = []
+    for net_col in ["wifi_ssid", "carrier"]:
+        if net_col not in df.columns or "entity_id" not in df.columns:
+            continue
+        sub = df[["entity_id", net_col]].dropna()
+        if sub.empty:
+            continue
+        grouped = sub.groupby(net_col)["entity_id"].apply(set)
+        for net_name, entities in grouped.items():
+            if len(entities) < 2 or len(entities) > 30:
+                continue
+            out.append(
+                {
+                    "network_type": net_col,
+                    "network_name": str(net_name),
+                    "entity_count": len(entities),
+                    "entities": sorted(entities)[:10],
+                }
+            )
+    out.sort(key=lambda x: -x["entity_count"])
+    return out[:40]
+
+
+def fuse_geofence(df):
+    """Geofence entry/exit detection using configured zones.
+    Zones loaded from GEOFENCE_CONFIG env var (JSON file)."""
+    import os, json as _json
+
+    needed = {"entity_id", "latitude", "longitude", "event_time"}
+    if not needed.issubset(df.columns):
+        return {"zones": [], "events": []}
+
+    config_path = os.environ.get("GEOFENCE_CONFIG", "")
+    zones = []
+    if config_path and os.path.exists(config_path):
+        try:
+            with open(config_path) as f:
+                zones = _json.load(f)
+        except Exception:
+            pass
+
+    # Default demo zones if none configured
+    if not zones:
+        zones = [
+            {"name": "ZONE-ALPHA", "lat": 32.0, "lon": 53.0, "radius_km": 50},
+            {"name": "ZONE-BRAVO", "lat": 35.7, "lon": 51.4, "radius_km": 30},
+            {"name": "ZONE-CHARLIE", "lat": 29.6, "lon": 52.5, "radius_km": 40},
+        ]
+
+    sub = df[list(needed)].dropna().sort_values("event_time")
+    if len(sub) > 30000:
+        sub = sub.sample(30000, random_state=42)
+
+    events = []
+    for zone in zones:
+        zlat, zlon, zr = zone["lat"], zone["lon"], zone["radius_km"]
+        dists = _haversine_km(
+            sub["latitude"].values, sub["longitude"].values, zlat, zlon
+        )
+        inside = dists <= zr
+        zone_sub = sub[inside]
+        entity_counts = zone_sub["entity_id"].nunique() if not zone_sub.empty else 0
+        event_counts = len(zone_sub)
+        zone["entities_detected"] = int(entity_counts)
+        zone["total_events"] = int(event_counts)
+
+        if not zone_sub.empty:
+            # Top entities in zone
+            top_entities = zone_sub["entity_id"].value_counts().head(5)
+            for eid, cnt in top_entities.items():
+                entity_times = zone_sub[zone_sub["entity_id"] == eid]["event_time"]
+                dwell_mins = 0
+                if len(entity_times) > 1:
+                    dwell_mins = int(
+                        (entity_times.max() - entity_times.min()).total_seconds() / 60
+                    )
+                events.append(
+                    {
+                        "zone": zone["name"],
+                        "entity_id": str(eid),
+                        "observations": int(cnt),
+                        "dwell_minutes": dwell_mins,
+                    }
+                )
+
+    return {"zones": zones, "events": events[:60]}
+
+
+def fuse_dwell(df):
+    """Group consecutive events per entity within ~200 m into dwell sessions."""
+    needed = {"entity_id", "latitude", "longitude", "event_time"}
+    if not needed.issubset(df.columns):
+        return []
+    sub = df[list(needed)].dropna().sort_values(["entity_id", "event_time"])
+    if len(sub) > 30000:
+        sub = sub.sample(30000, random_state=42).sort_values(
+            ["entity_id", "event_time"]
+        )
+
+    sessions = []
+    for eid, grp in sub.groupby("entity_id"):
+        if len(grp) < 2:
+            continue
+        lats = grp["latitude"].values
+        lons = grp["longitude"].values
+        times = grp["event_time"].values
+
+        session_start = 0
+        for i in range(1, len(grp)):
+            dist = _haversine_km(
+                lats[i], lons[i], lats[session_start], lons[session_start]
+            )
+            if dist > 0.2:  # > 200m = new session
+                duration = (times[i - 1] - times[session_start]) / np.timedelta64(
+                    1, "m"
+                )
+                if duration > 5:  # at least 5 min dwell
+                    sessions.append(
+                        {
+                            "entity_id": str(eid),
+                            "lat": round(float(np.mean(lats[session_start:i])), 5),
+                            "lon": round(float(np.mean(lons[session_start:i])), 5),
+                            "dwell_minutes": round(float(duration), 1),
+                            "observations": i - session_start,
+                        }
+                    )
+                session_start = i
+
+    sessions.sort(key=lambda x: -x["dwell_minutes"])
+    return sessions[:60]
+
+
+# ---------------------------------------------------------------------------
+# ── Multi-Domain Intelligence ─────────────────────────────────────────────
+# ---------------------------------------------------------------------------
+
+
+def _domain_value_counts(df, columns, limit=12):
+    """Generic domain breakdown for columns that may or may not exist."""
+    out = {}
+    for col in columns:
+        if col in df.columns and df[col].notna().any():
+            vc = df[col].value_counts().head(limit)
+            out[col] = [{"label": str(k), "value": int(v)} for k, v in vc.items()]
+    return out
+
+
+def fuse_maritime(df):
+    """AIS / SHADOWFLEET™ maritime domain analysis."""
+    cols = [
+        "mmsi",
+        "imo",
+        "vessel_name",
+        "flag_state",
+        "ship_type",
+        "vessel_status",
+        "destination",
+        "cargo_type",
+    ]
+    out = _domain_value_counts(df, cols)
+    out["_has_data"] = bool(out)
+    if "mmsi" in df.columns:
+        out["unique_vessels"] = int(df["mmsi"].nunique())
+    return out
+
+
+def fuse_aviation(df):
+    """ADS-B aviation domain analysis."""
+    cols = [
+        "icao24",
+        "callsign",
+        "flight_number",
+        "squawk",
+        "aircraft_type",
+        "airline",
+        "origin_airport",
+        "dest_airport",
+    ]
+    out = _domain_value_counts(df, cols)
+    out["_has_data"] = bool({k: v for k, v in out.items() if k != "_has_data"})
+    if "icao24" in df.columns:
+        out["unique_aircraft"] = int(df["icao24"].nunique())
+    return out
+
+
+def fuse_cyber(df):
+    """Cyber domain — IP, domain, threat indicators."""
+    cols = [
+        "ip_address",
+        "domain",
+        "user_agent",
+        "threat_category",
+        "malware_family",
+        "protocol",
+        "port",
+    ]
+    out = _domain_value_counts(df, cols)
+    out["_has_data"] = bool({k: v for k, v in out.items() if k != "_has_data"})
+    if "threat_score" in df.columns:
+        s = pd.to_numeric(df["threat_score"], errors="coerce").dropna()
+        if not s.empty:
+            hist, edges = np.histogram(s, bins=20)
+            out["threat_score_hist"] = [
+                {"bin": round(float(edges[i]), 2), "count": int(hist[i])}
+                for i in range(len(hist))
+            ]
+    return out
+
+
+def fuse_rf(df):
+    """RF / SIGINT domain — frequency, emitter analysis."""
+    cols = [
+        "frequency_mhz",
+        "modulation",
+        "emitter_id",
+        "signal_type",
+        "bandwidth_khz",
+        "polarization",
+    ]
+    out = _domain_value_counts(df, cols)
+    out["_has_data"] = bool({k: v for k, v in out.items() if k != "_has_data"})
+    if "signal_strength" in df.columns:
+        s = pd.to_numeric(df["signal_strength"], errors="coerce").dropna()
+        if not s.empty:
+            hist, edges = np.histogram(s, bins=20)
+            out["signal_strength_hist"] = [
+                {"bin": round(float(edges[i]), 2), "count": int(hist[i])}
+                for i in range(len(hist))
+            ]
+    return out
+
+
+def fuse_osint(df):
+    """OSINT domain — source, platform, sentiment."""
+    cols = [
+        "source_url",
+        "source_platform",
+        "language",
+        "author",
+        "content_type",
+        "media_type",
+    ]
+    out = _domain_value_counts(df, cols)
+    out["_has_data"] = bool({k: v for k, v in out.items() if k != "_has_data"})
+    if "sentiment_score" in df.columns:
+        s = pd.to_numeric(df["sentiment_score"], errors="coerce").dropna()
+        if not s.empty:
+            bins = [-1, -0.5, -0.1, 0.1, 0.5, 1.0]
+            labels = [
+                "Very Negative",
+                "Negative",
+                "Neutral",
+                "Positive",
+                "Very Positive",
+            ]
+            cats = pd.cut(s, bins=bins, labels=labels)
+            vc = cats.value_counts().reindex(labels).fillna(0)
+            out["sentiment_breakdown"] = [
+                {"label": l, "value": int(v)} for l, v in zip(vc.index, vc.values)
+            ]
+    return out
+
+
+# ---------------------------------------------------------------------------
+# ── SKYTRACE™ — Satellite ISP Correlation ─────────────────────────────────
+# ---------------------------------------------------------------------------
+
+
+def fuse_skytrace(df):
+    """Satellite ISP usage correlation."""
+    cols = [
+        "isp_name",
+        "connection_type",
+        "satellite_provider",
+        "ip_geo_country",
+        "ip_geo_city",
+        "vpn_detected",
+    ]
+    out = _domain_value_counts(df, cols)
+    out["_has_data"] = bool({k: v for k, v in out.items() if k != "_has_data"})
+
+    # Entity ↔ ISP correlation
+    if "entity_id" in df.columns and "isp_name" in df.columns:
+        sub = df[["entity_id", "isp_name"]].dropna()
+        if not sub.empty:
+            ct = sub.groupby(["entity_id", "isp_name"]).size().reset_index(name="count")
+            ct = ct.sort_values("count", ascending=False).head(30)
+            out["entity_isp_corr"] = df_to_records(ct)
+
+    return out
+
+
+# ---------------------------------------------------------------------------
+# ── Geocoding & Translation ───────────────────────────────────────────────
+# ---------------------------------------------------------------------------
+
+
+def geocode_summary(df):
+    """Approximate reverse-geocode using lat/lon region buckets."""
+    if "latitude" not in df.columns or "longitude" not in df.columns:
+        return []
+    sub = df[["latitude", "longitude"]].dropna()
+    if sub.empty:
+        return []
+    # Approximate region labels by lat/lon ranges
+    regions = [
+        {
+            "name": "Middle East",
+            "lat_min": 12,
+            "lat_max": 42,
+            "lon_min": 25,
+            "lon_max": 65,
+        },
+        {"name": "Europe", "lat_min": 35, "lat_max": 72, "lon_min": -10, "lon_max": 40},
+        {
+            "name": "East Asia",
+            "lat_min": 15,
+            "lat_max": 55,
+            "lon_min": 100,
+            "lon_max": 150,
+        },
+        {
+            "name": "South Asia",
+            "lat_min": 5,
+            "lat_max": 40,
+            "lon_min": 60,
+            "lon_max": 100,
+        },
+        {
+            "name": "Africa",
+            "lat_min": -35,
+            "lat_max": 37,
+            "lon_min": -20,
+            "lon_max": 55,
+        },
+        {
+            "name": "North America",
+            "lat_min": 15,
+            "lat_max": 72,
+            "lon_min": -170,
+            "lon_max": -50,
+        },
+        {
+            "name": "South America",
+            "lat_min": -56,
+            "lat_max": 15,
+            "lon_min": -82,
+            "lon_max": -34,
+        },
+        {
+            "name": "Oceania",
+            "lat_min": -50,
+            "lat_max": 0,
+            "lon_min": 110,
+            "lon_max": 180,
+        },
+    ]
+    results = []
+    for r in regions:
+        mask = (
+            (sub["latitude"] >= r["lat_min"])
+            & (sub["latitude"] <= r["lat_max"])
+            & (sub["longitude"] >= r["lon_min"])
+            & (sub["longitude"] <= r["lon_max"])
+        )
+        cnt = int(mask.sum())
+        if cnt > 0:
+            results.append({"region": r["name"], "events": cnt})
+    results.sort(key=lambda x: -x["events"])
+    return results
+
+
+def fuse_translation(df):
+    """Stub for language detection, translation, and image analysis metadata."""
+    out = {"_has_data": False}
+    # Language detection on text fields
+    text_cols = [
+        c
+        for c in df.columns
+        if any(k in c.lower() for k in ["text", "message", "content", "description"])
+    ]
+    if text_cols:
+        out["text_columns_detected"] = text_cols
+        out["_has_data"] = True
+        # Simple language heuristic: check for non-ASCII chars ratio
+        for col in text_cols[:3]:
+            vals = df[col].dropna().astype(str)
+            if vals.empty:
+                continue
+            sample = vals.head(100)
+            ascii_ratio = sample.apply(
+                lambda x: sum(1 for c in x if ord(c) < 128) / max(len(x), 1)
+            ).mean()
+            out[f"{col}_ascii_ratio"] = round(float(ascii_ratio), 3)
+            out[f"{col}_sample_count"] = int(len(vals))
+
+    # Image/media columns
+    media_cols = [
+        c
+        for c in df.columns
+        if any(k in c.lower() for k in ["image", "photo", "media", "attachment"])
+    ]
+    if media_cols:
+        out["media_columns_detected"] = media_cols
+        out["_has_data"] = True
+
+    return out
+
+
+# ---------------------------------------------------------------------------
+# ── Updated load_and_fuse ─────────────────────────────────────────────────
+# ---------------------------------------------------------------------------
+
+
 def load_and_fuse(path: str) -> dict:
     p = Path(path)
     if p.is_dir():
@@ -417,4 +916,17 @@ def load_and_fuse(path: str) -> dict:
         "associations": fuse_associations(df),
         "anomalies": fuse_anomalies(df),
         "network": fuse_network(df),
+        "colocation": fuse_colocation(df),
+        "cotravel": fuse_cotravel(df),
+        "conetwork": fuse_conetwork(df),
+        "geofence": fuse_geofence(df),
+        "dwell": fuse_dwell(df),
+        "maritime": fuse_maritime(df),
+        "aviation": fuse_aviation(df),
+        "cyber": fuse_cyber(df),
+        "rf": fuse_rf(df),
+        "osint": fuse_osint(df),
+        "skytrace": fuse_skytrace(df),
+        "geocode": geocode_summary(df),
+        "translation": fuse_translation(df),
     }

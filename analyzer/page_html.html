@@ -476,7 +476,12 @@
         <button class="tab" onclick="showTab('devices')">Devices</button>
         <button class="tab" onclick="showTab('movement')">Movement</button>
         <button class="tab" onclick="showTab('network')">Network</button>
+        <button class="tab" onclick="showTab('behavioral')">Behavioral</button>
+        <button class="tab" onclick="showTab('geofence')">Geofence</button>
+        <button class="tab" onclick="showTab('multidomain')">Multi-Domain</button>
+        <button class="tab" onclick="showTab('skytrace')">SKYTRACE™</button>
         <button class="tab" onclick="showTab('anomalies')">Anomalies</button>
+        <button class="tab" onclick="showTab('api')">API</button>
     </div>
 
     <!-- OVERVIEW -->
@@ -557,6 +562,85 @@
         <div class="chart-grid cols2" id="network-charts"></div>
     </div>
 
+    <!-- BEHAVIORAL -->
+    <div id="page-behavioral" class="page">
+        <div class="chart-grid cols2">
+            <div class="card">
+                <div class="card-title">⊞ Co-Location Network — Entity Pairs (within ~100m / 30min)</div>
+                <div id="colocation-table" style="max-height:360px;overflow-y:auto"></div>
+            </div>
+            <div class="card">
+                <div class="card-title">⊞ Co-Travel Pairs — Entities at ≥3 Shared Locations</div>
+                <div id="cotravel-table" style="max-height:360px;overflow-y:auto"></div>
+            </div>
+            <div class="card" style="grid-column:1/-1">
+                <div class="card-title">⊞ Co-Network Association — Shared WiFi/Carrier</div>
+                <div id="conetwork-table" style="max-height:360px;overflow-y:auto"></div>
+            </div>
+        </div>
+    </div>
+
+    <!-- GEOFENCE -->
+    <div id="page-geofence" class="page">
+        <div class="chart-grid cols2">
+            <div class="card">
+                <div class="card-title">⊞ Geofence Zones — Entity Detection Summary</div>
+                <div id="geofence-zones" style="max-height:320px;overflow-y:auto"></div>
+            </div>
+            <div class="card">
+                <div class="card-title">⊞ Geofence Events — Top Entity Dwell</div>
+                <div id="geofence-events" style="max-height:320px;overflow-y:auto"></div>
+            </div>
+            <div class="card">
+                <div class="card-title">⊞ Top Dwell Sessions — Longest Stationary Periods</div>
+                <div id="dwell-table" style="max-height:320px;overflow-y:auto"></div>
+            </div>
+            <div class="card">
+                <div class="card-title">⊞ Geocode Region Summary</div>
+                <canvas id="chart-geocode"></canvas>
+            </div>
+        </div>
+    </div>
+
+    <!-- MULTI-DOMAIN -->
+    <div id="page-multidomain" class="page">
+        <div style="display:flex;gap:2px;margin-bottom:16px;flex-wrap:wrap" id="domain-subtabs">
+            <button class="tab active" onclick="showDomainSub('maritime')">🚢 Maritime / SHADOWFLEET™</button>
+            <button class="tab" onclick="showDomainSub('aviation')">✈ Aviation / ADS-B</button>
+            <button class="tab" onclick="showDomainSub('cyber')">🔒 Cyber</button>
+            <button class="tab" onclick="showDomainSub('rf')">📡 RF / SIGINT</button>
+            <button class="tab" onclick="showDomainSub('osint')">🌐 OSINT</button>
+        </div>
+        <div id="domain-maritime" class="domain-sub active">
+            <div class="chart-grid cols2" id="maritime-charts"></div>
+        </div>
+        <div id="domain-aviation" class="domain-sub" style="display:none">
+            <div class="chart-grid cols2" id="aviation-charts"></div>
+        </div>
+        <div id="domain-cyber" class="domain-sub" style="display:none">
+            <div class="chart-grid cols2" id="cyber-charts"></div>
+        </div>
+        <div id="domain-rf" class="domain-sub" style="display:none">
+            <div class="chart-grid cols2" id="rf-charts"></div>
+        </div>
+        <div id="domain-osint" class="domain-sub" style="display:none">
+            <div class="chart-grid cols2" id="osint-charts"></div>
+        </div>
+    </div>
+
+    <!-- SKYTRACE -->
+    <div id="page-skytrace" class="page">
+        <div class="card" style="margin-bottom:20px">
+            <div class="card-title">⊞ SKYTRACE™ — Satellite ISP Usage Correlation</div>
+            <div style="color:var(--muted);font-family:var(--font-mono);font-size:11px;line-height:1.6">
+                <p>Correlates entity geolocation observations with satellite-based Internet Service Provider usage
+                    patterns. Identifies entities using satellite connectivity (e.g. Starlink, Hughes, Viasat) and maps
+                    their digital footprint to physical locations.</p>
+            </div>
+        </div>
+        <div class="chart-grid cols2" id="skytrace-charts"></div>
+    </div>
+
     <!-- ANOMALIES -->
     <div id="page-anomalies" class="page">
         <div class="card" style="margin-bottom: 20px;">
@@ -584,6 +668,34 @@
                 </thead>
                 <tbody id="anomaly-tbody"></tbody>
             </table>
+        </div>
+    </div>
+
+    <!-- API EXPLORER -->
+    <div id="page-api" class="page">
+        <div class="card" style="margin-bottom:20px">
+            <div class="card-title">⊞ API v1 — External Integration</div>
+            <div style="color:var(--muted);font-family:var(--font-mono);font-size:11px;line-height:1.8">
+                <p style="margin-bottom:10px;color:var(--text)">All endpoints return JSON. Base path: <code
+                        style="color:var(--glow)">/s3-watcher/api/v1</code></p>
+                <div id="api-key-status" style="margin-bottom:12px"></div>
+                <table class="assoc-table" id="api-endpoints-table">
+                    <thead>
+                        <tr>
+                            <th>Method</th>
+                            <th>Endpoint</th>
+                            <th>Description</th>
+                            <th>Test</th>
+                        </tr>
+                    </thead>
+                    <tbody></tbody>
+                </table>
+            </div>
+        </div>
+        <div class="card">
+            <div class="card-title">⊞ Live API Response</div>
+            <pre id="api-response"
+                style="background:#050a0e;border:1px solid var(--border);padding:14px;font-family:var(--font-mono);font-size:11px;color:var(--glow);max-height:400px;overflow:auto;white-space:pre-wrap">Click "Test" on any endpoint above to see the response here.</pre>
         </div>
     </div>
 
@@ -1033,6 +1145,189 @@
   </table>`;
         }
 
+        // ── behavioral ──
+        function renderBehavioral(colocation, cotravel, conetwork) {
+            // Co-location table
+            const coloc = document.getElementById('colocation-table');
+            if (colocation && colocation.length) {
+                coloc.innerHTML = `<table class="assoc-table"><thead><tr><th>Entity A</th><th>Entity B</th><th>Co-Events</th></tr></thead><tbody>${colocation.map(r => `<tr><td style="color:var(--glow2)">${r.entity_a || '—'}</td><td style="color:var(--glow2)">${r.entity_b || '—'}</td><td style="color:var(--glow)">${r.co_events}</td></tr>`).join('')}</tbody></table>`;
+            } else {
+                coloc.innerHTML = '<p style="color:var(--muted);font-family:var(--font-mono);padding:20px;text-align:center">No co-location pairs detected</p>';
+            }
+
+            // Co-travel table
+            const cotrav = document.getElementById('cotravel-table');
+            if (cotravel && cotravel.length) {
+                cotrav.innerHTML = `<table class="assoc-table"><thead><tr><th>Entity A</th><th>Entity B</th><th>Shared Locations</th></tr></thead><tbody>${cotravel.map(r => `<tr><td style="color:var(--glow2)">${r.entity_a || '—'}</td><td style="color:var(--glow2)">${r.entity_b || '—'}</td><td style="color:var(--warn)">${r.shared_locations}</td></tr>`).join('')}</tbody></table>`;
+            } else {
+                cotrav.innerHTML = '<p style="color:var(--muted);font-family:var(--font-mono);padding:20px;text-align:center">No co-travel pairs detected (need ≥3 shared locations)</p>';
+            }
+
+            // Co-network table
+            const conet = document.getElementById('conetwork-table');
+            if (conetwork && conetwork.length) {
+                conet.innerHTML = `<table class="assoc-table"><thead><tr><th>Network Type</th><th>Network Name</th><th>Entity Count</th><th>Entities (sample)</th></tr></thead><tbody>${conetwork.map(r => `<tr><td><span class="badge low">${r.network_type}</span></td><td style="color:var(--text)">${r.network_name}</td><td style="color:var(--glow)">${r.entity_count}</td><td style="color:var(--muted);font-size:10px">${(r.entities || []).join(', ')}</td></tr>`).join('')}</tbody></table>`;
+            } else {
+                conet.innerHTML = '<p style="color:var(--muted);font-family:var(--font-mono);padding:20px;text-align:center">No co-network associations detected</p>';
+            }
+        }
+
+        // ── geofence ──
+        function renderGeofence(geofence, dwell, geocode) {
+            // Zones
+            const zones = document.getElementById('geofence-zones');
+            if (geofence && geofence.zones && geofence.zones.length) {
+                zones.innerHTML = `<table class="assoc-table"><thead><tr><th>Zone</th><th>Radius (km)</th><th>Entities</th><th>Events</th></tr></thead><tbody>${geofence.zones.map(z => `<tr><td style="color:var(--warn);font-weight:bold">${z.name}</td><td>${z.radius_km}</td><td style="color:var(--glow)">${z.entities_detected || 0}</td><td>${z.total_events || 0}</td></tr>`).join('')}</tbody></table>`;
+            } else {
+                zones.innerHTML = '<p style="color:var(--muted);font-family:var(--font-mono);padding:20px;text-align:center">No geofence zones configured</p>';
+            }
+
+            // Geofence events
+            const evts = document.getElementById('geofence-events');
+            if (geofence && geofence.events && geofence.events.length) {
+                evts.innerHTML = `<table class="assoc-table"><thead><tr><th>Zone</th><th>Entity</th><th>Observations</th><th>Dwell (min)</th></tr></thead><tbody>${geofence.events.map(e => `<tr><td style="color:var(--warn)">${e.zone}</td><td style="color:var(--glow2)">${e.entity_id}</td><td>${e.observations}</td><td style="color:var(--glow)">${e.dwell_minutes}</td></tr>`).join('')}</tbody></table>`;
+            } else {
+                evts.innerHTML = '<p style="color:var(--muted);font-family:var(--font-mono);padding:20px;text-align:center">No geofence events detected</p>';
+            }
+
+            // Dwell sessions
+            const dwt = document.getElementById('dwell-table');
+            if (dwell && dwell.length) {
+                dwt.innerHTML = `<table class="assoc-table"><thead><tr><th>Entity</th><th>Lat</th><th>Lon</th><th>Dwell (min)</th><th>Obs</th></tr></thead><tbody>${dwell.map(d => `<tr><td style="color:var(--glow2)">${d.entity_id}</td><td>${d.lat}</td><td>${d.lon}</td><td style="color:var(--warn);font-weight:bold">${d.dwell_minutes}</td><td style="color:var(--muted)">${d.observations}</td></tr>`).join('')}</tbody></table>`;
+            } else {
+                dwt.innerHTML = '<p style="color:var(--muted);font-family:var(--font-mono);padding:20px;text-align:center">No dwell sessions detected (need >5 min stationary)</p>';
+            }
+
+            // Geocode chart
+            if (geocode && geocode.length) {
+                makeBar('chart-geocode', geocode.map(g => g.region), geocode.map(g => g.events), { horizontal: true });
+            }
+        }
+
+        // ── multi-domain ──
+        function showDomainSub(name) {
+            document.querySelectorAll('#domain-subtabs .tab').forEach(t => t.classList.remove('active'));
+            document.querySelectorAll('.domain-sub').forEach(d => d.style.display = 'none');
+            event.target.classList.add('active');
+            document.getElementById('domain-' + name).style.display = 'block';
+        }
+
+        function renderDomainCharts(containerId, data, chartPrefix) {
+            const container = document.getElementById(containerId);
+            if (!data || !data._has_data) {
+                container.innerHTML = '<div class="card" style="grid-column:1/-1"><div style="color:var(--muted);font-family:var(--font-mono);padding:40px;text-align:center">⊘ No data available for this domain. Data will appear when matching columns are present in ingested datasets.</div></div>';
+                return;
+            }
+            let html = '';
+            const skip = ['_has_data', 'unique_vessels', 'unique_aircraft', 'threat_score_hist', 'signal_strength_hist', 'sentiment_breakdown', 'entity_isp_corr'];
+            // Summary KPI if available
+            if (data.unique_vessels) html += `<div class="card"><div class="card-title">⊞ UNIQUE VESSELS</div><div class="kpi"><div class="value" style="font-size:48px">${data.unique_vessels.toLocaleString()}</div></div></div>`;
+            if (data.unique_aircraft) html += `<div class="card"><div class="card-title">⊞ UNIQUE AIRCRAFT</div><div class="kpi"><div class="value" style="font-size:48px">${data.unique_aircraft.toLocaleString()}</div></div></div>`;
+
+            Object.entries(data).forEach(([k, v]) => {
+                if (skip.includes(k) || !Array.isArray(v) || !v.length) return;
+                html += `<div class="card"><div class="card-title">⊞ ${k.replace(/_/g, ' ').toUpperCase()}</div><canvas id="${chartPrefix}-${k}"></canvas></div>`;
+            });
+
+            // Histograms
+            if (data.threat_score_hist) html += `<div class="card"><div class="card-title">⊞ THREAT SCORE DISTRIBUTION</div><canvas id="${chartPrefix}-threat"></canvas></div>`;
+            if (data.signal_strength_hist) html += `<div class="card"><div class="card-title">⊞ SIGNAL STRENGTH DISTRIBUTION</div><canvas id="${chartPrefix}-signal"></canvas></div>`;
+            if (data.sentiment_breakdown) html += `<div class="card"><div class="card-title">⊞ SENTIMENT BREAKDOWN</div><canvas id="${chartPrefix}-sentiment"></canvas></div>`;
+
+            container.innerHTML = html;
+
+            // Render bar charts
+            Object.entries(data).forEach(([k, v]) => {
+                if (skip.includes(k) || !Array.isArray(v) || !v.length) return;
+                makeBar(`${chartPrefix}-${k}`, v.map(d => d.label), v.map(d => d.value), { horizontal: true });
+            });
+            if (data.threat_score_hist) makeBar(`${chartPrefix}-threat`, data.threat_score_hist.map(d => d.bin), data.threat_score_hist.map(d => d.count));
+            if (data.signal_strength_hist) makeBar(`${chartPrefix}-signal`, data.signal_strength_hist.map(d => d.bin), data.signal_strength_hist.map(d => d.count));
+            if (data.sentiment_breakdown) makeBar(`${chartPrefix}-sentiment`, data.sentiment_breakdown.map(d => d.label), data.sentiment_breakdown.map(d => d.value));
+        }
+
+        function renderMultiDomain(maritime, aviation, cyber, rf, osint) {
+            renderDomainCharts('maritime-charts', maritime, 'mar');
+            renderDomainCharts('aviation-charts', aviation, 'avi');
+            renderDomainCharts('cyber-charts', cyber, 'cyb');
+            renderDomainCharts('rf-charts', rf, 'rfc');
+            renderDomainCharts('osint-charts', osint, 'osi');
+        }
+
+        // ── SKYTRACE ──
+        function renderSkytrace(data) {
+            const container = document.getElementById('skytrace-charts');
+            if (!data || !data._has_data) {
+                container.innerHTML = '<div class="card" style="grid-column:1/-1"><div style="color:var(--muted);font-family:var(--font-mono);padding:40px;text-align:center">⊘ No SKYTRACE™ data available. Data will appear when ISP/satellite connectivity columns are present in ingested datasets.</div></div>';
+                return;
+            }
+            let html = '';
+            const skip = ['_has_data', 'entity_isp_corr'];
+            Object.entries(data).forEach(([k, v]) => {
+                if (skip.includes(k) || !Array.isArray(v) || !v.length) return;
+                html += `<div class="card"><div class="card-title">⊞ ${k.replace(/_/g, ' ').toUpperCase()}</div><canvas id="sky-${k}"></canvas></div>`;
+            });
+            if (data.entity_isp_corr && data.entity_isp_corr.length) {
+                html += `<div class="card" style="grid-column:1/-1"><div class="card-title">⊞ ENTITY ↔ ISP CORRELATION</div><div id="sky-corr-table" style="max-height:300px;overflow-y:auto"></div></div>`;
+            }
+            container.innerHTML = html;
+            Object.entries(data).forEach(([k, v]) => {
+                if (skip.includes(k) || !Array.isArray(v) || !v.length) return;
+                makeBar(`sky-${k}`, v.map(d => d.label), v.map(d => d.value), { horizontal: true });
+            });
+            if (data.entity_isp_corr && data.entity_isp_corr.length) {
+                document.getElementById('sky-corr-table').innerHTML = `<table class="assoc-table"><thead><tr><th>Entity</th><th>ISP</th><th>Events</th></tr></thead><tbody>${data.entity_isp_corr.map(r => `<tr><td style="color:var(--glow2)">${r.entity_id || '—'}</td><td>${r.isp_name || '—'}</td><td style="color:var(--glow)">${r.count || 0}</td></tr>`).join('')}</tbody></table>`;
+            }
+        }
+
+        // ── API explorer ──
+        function renderApiExplorer() {
+            const endpoints = [
+                { method: 'GET', path: '/summary', desc: 'KPI summary metrics' },
+                { method: 'GET', path: '/entities', desc: 'Unique entity list with last positions' },
+                { method: 'GET', path: '/geo', desc: 'Geospatial observation points' },
+                { method: 'GET', path: '/timeline', desc: 'Daily event timeline with rolling average' },
+                { method: 'GET', path: '/behavioral', desc: 'Co-location, co-travel, co-network analysis' },
+                { method: 'GET', path: '/behavioral/colocation', desc: 'Co-located entity pairs' },
+                { method: 'GET', path: '/behavioral/cotravel', desc: 'Co-traveling entity pairs' },
+                { method: 'GET', path: '/behavioral/conetwork', desc: 'Shared-network entity groups' },
+                { method: 'GET', path: '/geofence', desc: 'Geofence zones + dwell analysis' },
+                { method: 'GET', path: '/geofence/zones', desc: 'Geofence zone detection summary' },
+                { method: 'GET', path: '/geofence/dwell', desc: 'Dwell session analysis' },
+                { method: 'GET', path: '/domains/maritime', desc: 'Maritime / AIS / SHADOWFLEET™ data' },
+                { method: 'GET', path: '/domains/aviation', desc: 'Aviation / ADS-B data' },
+                { method: 'GET', path: '/domains/cyber', desc: 'Cyber threat indicators' },
+                { method: 'GET', path: '/domains/rf', desc: 'RF / SIGINT emitter data' },
+                { method: 'GET', path: '/domains/osint', desc: 'OSINT source analysis' },
+                { method: 'GET', path: '/skytrace', desc: 'SKYTRACE™ satellite ISP correlation' },
+                { method: 'GET', path: '/anomalies', desc: 'Anomaly detection flags' },
+                { method: 'GET', path: '/units', desc: 'Military unit breakdowns' },
+                { method: 'GET', path: '/devices', desc: 'Device brand & platform analysis' },
+                { method: 'GET', path: '/movement', desc: 'Speed, heading, altitude analysis' },
+                { method: 'GET', path: '/geocode', desc: 'Geocode region summary' },
+                { method: 'POST', path: '/s3/access', desc: 'Secure S3 object proxy (body: {bucket, key})' },
+            ];
+            const tbody = document.querySelector('#api-endpoints-table tbody');
+            tbody.innerHTML = endpoints.map(e => `<tr>
+                <td><span class="badge ${e.method === 'POST' ? 'high' : 'low'}">${e.method}</span></td>
+                <td style="color:var(--glow);font-family:var(--font-mono)">/s3-watcher/api/v1${e.path}</td>
+                <td style="color:var(--muted)">${e.desc}</td>
+                <td>${e.method === 'GET' ? `<button onclick="testApi('${e.path}')" style="background:var(--surface);border:1px solid var(--glow);color:var(--glow);padding:4px 12px;cursor:pointer;font-family:var(--font-mono);font-size:10px">TEST</button>` : '—'}</td>
+            </tr>`).join('');
+        }
+
+        async function testApi(path) {
+            const pre = document.getElementById('api-response');
+            pre.textContent = `Fetching /s3-watcher/api/v1${path} ...`;
+            try {
+                const res = await fetch(`/s3-watcher/api/v1${path}`);
+                const data = await res.json();
+                pre.textContent = JSON.stringify(data, null, 2);
+            } catch (e) {
+                pre.textContent = `Error: ${e.message}`;
+            }
+        }
+
         // ── bootstrap ──
         async function boot() {
             try {
@@ -1045,13 +1340,17 @@
                 renderKPIs(D.summary);
                 renderHeatmap(D.heatmap);
                 renderTimeline(D.timeline);
-                // renderGeo(D.geo); // Delegated to showTab('geo')
                 renderUnits(D.units);
                 renderDevices(D.devices);
                 renderMovement(D.movement);
                 renderNetwork(D.network);
                 renderAnomalies(D.anomalies);
                 renderAssociations(D.associations);
+                renderBehavioral(D.colocation, D.cotravel, D.conetwork);
+                renderGeofence(D.geofence, D.dwell, D.geocode);
+                renderMultiDomain(D.maritime, D.aviation, D.cyber, D.rf, D.osint);
+                renderSkytrace(D.skytrace);
+                renderApiExplorer();
             } catch (e) {
                 document.getElementById('loading').querySelector('p').textContent = 'ERROR: ' + e.message;
             }

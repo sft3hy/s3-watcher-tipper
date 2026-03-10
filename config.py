@@ -1,9 +1,10 @@
-
 import os
 
 CS_HOST = "chatsurfer.nro.mil"
 CHATKEY = os.environ.get("CHATKEY", "")
 TEST = os.environ.get("TEST_LOCAL", "False")
+API_KEY = os.environ.get("API_KEY", "")
+GEOFENCE_CONFIG = os.environ.get("GEOFENCE_CONFIG", "")
 
 # Certificate paths - prioritize environment variables if injected via Rancher Secret
 if TEST == "True":
