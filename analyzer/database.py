@@ -495,9 +495,12 @@ def load_from_clickhouse(host: str) -> dict:
     maritime_present = [c for c in maritime_cols if c in col_list]
     maritime_out = {"_has_data": False}
     if maritime_present:
+        condition = " OR ".join([f"{c} IS NOT NULL" for c in maritime_present if c in ["mmsi", "imo"]])
+        if not condition:
+            condition = "1=1"
         df_mar = _q(
             client,
-            f"SELECT {', '.join(maritime_present)} FROM sigint_data {_TIME_FILTER} AND (mmsi IS NOT NULL OR imo IS NOT NULL) ORDER BY rand() LIMIT {_ROW_CAP}",
+            f"SELECT {', '.join(maritime_present)} FROM sigint_data {_TIME_FILTER} AND ({condition}) ORDER BY rand() LIMIT {_ROW_CAP}",
             "maritime",
         )
         maritime_out = (
@@ -509,9 +512,12 @@ def load_from_clickhouse(host: str) -> dict:
     aviation_present = [c for c in aviation_cols if c in col_list]
     aviation_out = {"_has_data": False}
     if aviation_present:
+        condition = " OR ".join([f"{c} IS NOT NULL" for c in aviation_present if c in ["icao24", "callsign"]])
+        if not condition:
+            condition = "1=1"
         df_avi = _q(
             client,
-            f"SELECT {', '.join(aviation_present)} FROM sigint_data {_TIME_FILTER} AND (icao24 IS NOT NULL OR callsign IS NOT NULL) ORDER BY rand() LIMIT {_ROW_CAP}",
+            f"SELECT {', '.join(aviation_present)} FROM sigint_data {_TIME_FILTER} AND ({condition}) ORDER BY rand() LIMIT {_ROW_CAP}",
             "aviation",
         )
         aviation_out = (
@@ -529,9 +535,12 @@ def load_from_clickhouse(host: str) -> dict:
     cyber_present = [c for c in cyber_cols if c in col_list]
     cyber_out = {"_has_data": False}
     if cyber_present:
+        condition = " OR ".join([f"{c} IS NOT NULL" for c in cyber_present if c in ["ip_address", "domain"]])
+        if not condition:
+            condition = "1=1"
         df_cyb = _q(
             client,
-            f"SELECT {', '.join(cyber_present)} FROM sigint_data {_TIME_FILTER} AND (ip_address IS NOT NULL OR domain IS NOT NULL) ORDER BY rand() LIMIT {_ROW_CAP}",
+            f"SELECT {', '.join(cyber_present)} FROM sigint_data {_TIME_FILTER} AND ({condition}) ORDER BY rand() LIMIT {_ROW_CAP}",
             "cyber",
         )
         cyber_out = fuse_cyber(df_cyb) if not df_cyb.empty else {"_has_data": False}
@@ -541,9 +550,12 @@ def load_from_clickhouse(host: str) -> dict:
     rf_present = [c for c in rf_cols if c in col_list]
     rf_out = {"_has_data": False}
     if rf_present:
+        condition = " OR ".join([f"{c} IS NOT NULL" for c in rf_present if c in ["frequency_mhz", "emitter_id"]])
+        if not condition:
+            condition = "1=1"
         df_rf = _q(
             client,
-            f"SELECT {', '.join(rf_present)} FROM sigint_data {_TIME_FILTER} AND (frequency_mhz IS NOT NULL OR emitter_id IS NOT NULL) ORDER BY rand() LIMIT {_ROW_CAP}",
+            f"SELECT {', '.join(rf_present)} FROM sigint_data {_TIME_FILTER} AND ({condition}) ORDER BY rand() LIMIT {_ROW_CAP}",
             "rf",
         )
         rf_out = fuse_rf(df_rf) if not df_rf.empty else {"_has_data": False}
@@ -553,9 +565,12 @@ def load_from_clickhouse(host: str) -> dict:
     osint_present = [c for c in osint_cols if c in col_list]
     osint_out = {"_has_data": False}
     if osint_present:
+        condition = " OR ".join([f"{c} IS NOT NULL" for c in osint_present if c in ["source_url", "sentiment_score"]])
+        if not condition:
+            condition = "1=1"
         df_os = _q(
             client,
-            f"SELECT {', '.join(osint_present)} FROM sigint_data {_TIME_FILTER} AND (source_url IS NOT NULL OR sentiment_score IS NOT NULL) ORDER BY rand() LIMIT {_ROW_CAP}",
+            f"SELECT {', '.join(osint_present)} FROM sigint_data {_TIME_FILTER} AND ({condition}) ORDER BY rand() LIMIT {_ROW_CAP}",
             "osint",
         )
         osint_out = fuse_osint(df_os) if not df_os.empty else {"_has_data": False}
@@ -578,9 +593,12 @@ def load_from_clickhouse(host: str) -> dict:
         for c in ["isp_name", "connection_type", "satellite_provider"]
     )
     if has_isp:
+        condition = " OR ".join([f"{c} IS NOT NULL" for c in skytrace_present if c in ["isp_name", "satellite_provider", "connection_type"]])
+        if not condition:
+            condition = "1=1"
         df_sky = _q(
             client,
-            f"SELECT {', '.join(skytrace_present)} FROM sigint_data {_TIME_FILTER} AND (isp_name IS NOT NULL OR satellite_provider IS NOT NULL OR connection_type IS NOT NULL) ORDER BY rand() LIMIT {_ROW_CAP}",
+            f"SELECT {', '.join(skytrace_present)} FROM sigint_data {_TIME_FILTER} AND ({condition}) ORDER BY rand() LIMIT {_ROW_CAP}",
             "skytrace",
         )
         skytrace_out = (

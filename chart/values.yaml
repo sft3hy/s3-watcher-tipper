@@ -54,7 +54,7 @@ ingestionJob:
 
 clickhouse:
   enabled: true
-  storage: 50Gi
+  storage: 100Gi
   storageClass: "cosmichorizon-ebs-sc"
   user: "admin"
   password: "admin123"
