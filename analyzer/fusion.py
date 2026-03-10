@@ -27,6 +27,12 @@ def fuse_summary(df):
         if "event_time" in df.columns
         else pd.Series(dtype="object")
     )
+    countries = 0
+    if "country_code_1" in df.columns:
+        countries = int(df["country_code_1"].nunique())
+    elif "country_code" in df.columns:
+        countries = int(df["country_code"].nunique())
+
     return {
         "total_events": int(len(df)),
         "unique_entities": (
@@ -35,9 +41,7 @@ def fuse_summary(df):
         "unique_units": int(df["unit_id"].nunique()) if "unit_id" in df.columns else 0,
         "unique_sites": int(df["site_id"].nunique()) if "site_id" in df.columns else 0,
         "time_span_days": int((et.max() - et.min()).days) if len(et) > 1 else 0,
-        "countries": (
-            int(df["country_code_1"].nunique()) if "country_code_1" in df.columns else 0
-        ),
+        "countries": countries,
         "has_geo": int(df["latitude"].notna().sum()) if "latitude" in df.columns else 0,
         "null_pct": round(df.isnull().mean().mean() * 100, 1),
     }
@@ -60,18 +64,36 @@ def fuse_timeline(df):
 
 
 def fuse_geo(df):
-    if "latitude" not in df.columns:
+    cols = [
+        "latitude",
+        "longitude",
+        "entity_id",
+        "entity_type",
+        "entity_age",
+        "unit_name",
+        "speed",
+        "heading",
+        "altitude",
+        "horizontal_accuracy",
+        "event_location_accuracy_score",
+        "isp_name",
+        "satellite_provider",
+        "carrier",
+        "wifi_ssid",
+        "device_brand",
+        "device_model",
+        "platform",
+        "device_os",
+        "country_code",
+        "event_time",
+    ]
+    # Filter to only existing columns
+    existing = [c for c in cols if c in df.columns]
+
+    if "latitude" not in existing or "longitude" not in existing:
         return []
-    sub = df[
-        [
-            "latitude",
-            "longitude",
-            "entity_id",
-            "unit_name",
-            "speed",
-            "event_location_accuracy_score",
-        ]
-    ].dropna(subset=["latitude", "longitude"])
+
+    sub = df[existing].dropna(subset=["latitude", "longitude"])
     if len(sub) > 5000:
         sub = sub.sample(5000, random_state=42)
     return df_to_records(sub)
@@ -597,7 +619,7 @@ def _domain_value_counts(df, columns, limit=12):
 
 
 def fuse_maritime(df):
-    """AIS / SHADOWFLEET™ maritime domain analysis."""
+    """AIS / SHADOWFLEET maritime domain analysis."""
     cols = [
         "mmsi",
         "imo",
@@ -713,7 +735,7 @@ def fuse_osint(df):
 
 
 # ---------------------------------------------------------------------------
-# ── SKYTRACE™ — Satellite ISP Correlation ─────────────────────────────────
+# ── SKYTRACE — Satellite ISP Correlation ─────────────────────────────────
 # ---------------------------------------------------------------------------
 
 
@@ -730,11 +752,17 @@ def fuse_skytrace(df):
     out = _domain_value_counts(df, cols)
     out["_has_data"] = bool({k: v for k, v in out.items() if k != "_has_data"})
 
-    # Entity ↔ ISP correlation
-    if "entity_id" in df.columns and "isp_name" in df.columns:
-        sub = df[["entity_id", "isp_name"]].dropna()
+    # Entity ↔ ISP/Satellite correlation
+    isp_col = None
+    if "isp_name" in df.columns:
+        isp_col = "isp_name"
+    elif "satellite_provider" in df.columns:
+        isp_col = "satellite_provider"
+
+    if "entity_id" in df.columns and isp_col:
+        sub = df[["entity_id", isp_col]].dropna()
         if not sub.empty:
-            ct = sub.groupby(["entity_id", "isp_name"]).size().reset_index(name="count")
+            ct = sub.groupby(["entity_id", isp_col]).size().reset_index(name="count")
             ct = ct.sort_values("count", ascending=False).head(30)
             out["entity_isp_corr"] = df_to_records(ct)
 

@@ -1,0 +1,28 @@
+<div id="page-anomalies" class="page">
+    <div class="card" style="margin-bottom: 20px;">
+        <div class="card-title">⊞ About Anomalies</div>
+        <div style="color:var(--muted); line-height: 1.6; font-family:var(--font-mono); font-size:11px;">
+            <p style="margin-bottom: 6px;"><strong style="color:var(--text)">Burst Entities:</strong> Entities
+                generating an abnormally high number of events (&mu; + 3&sigma; above the mean). Often indicates
+                automated polling, misconfigured hardware, or active tracking beacons.</p>
+            <p style="margin-bottom: 6px;"><strong style="color:var(--text)">High Speed / Bad Coordinates:</strong>
+                Implausible physics or errant GPS device hardware.</p>
+            <p><strong style="color:var(--text)">Weak Unit Association:</strong> Devices with very low confidence
+                scores mapping them to a military unit/site.</p>
+        </div>
+    </div>
+    <div class="card">
+        <div class="card-title">⊞ Anomaly Flags</div>
+        <table class="anomaly-table">
+            <thead>
+                <tr>
+                    <th>Severity</th>
+                    <th>Type</th>
+                    <th>Count</th>
+                    <th>Description</th>
+                </tr>
+            </thead>
+            <tbody id="anomaly-tbody"></tbody>
+        </table>
+    </div>
+</div>

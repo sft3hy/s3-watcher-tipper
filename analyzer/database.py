@@ -163,8 +163,11 @@ def load_from_clickhouse(host: str) -> dict:
     df_geo = _q(
         client,
         f"""
-        SELECT latitude, longitude, entity_id, unit_name,
-               speed, event_location_accuracy_score
+        SELECT latitude, longitude, entity_id, entity_type, entity_age,
+               unit_name, speed, heading, altitude, horizontal_accuracy,
+               event_location_accuracy_score, isp_name, satellite_provider,
+               carrier, wifi_ssid, device_brand, device_model, platform,
+               device_os, country_code, event_time
         FROM sigint_data
         {_TIME_FILTER}
           AND latitude IS NOT NULL AND longitude IS NOT NULL
@@ -516,10 +519,23 @@ def load_from_clickhouse(host: str) -> dict:
         osint_out = fuse_osint(df_os) if not df_os.empty else {"_has_data": False}
 
     # ── 13. SKYTRACE (satellite ISP) ──────────────────────────────────
-    skytrace_cols = ["isp_name", "connection_type", "satellite_provider", "entity_id"]
+    skytrace_cols = [
+        "isp_name",
+        "connection_type",
+        "satellite_provider",
+        "vpn_detected",
+        "ip_geo_country",
+        "ip_geo_city",
+        "entity_id",
+    ]
     skytrace_present = [c for c in skytrace_cols if c in col_list]
     skytrace_out = {"_has_data": False}
-    if len(skytrace_present) > 1:
+    # Check if we have at least one ISP-related column besides entity_id
+    has_isp = any(
+        c in skytrace_present
+        for c in ["isp_name", "connection_type", "satellite_provider"]
+    )
+    if has_isp:
         df_sky = _q(
             client,
             f"SELECT {', '.join(skytrace_present)} FROM sigint_data {_TIME_FILTER} LIMIT {_ROW_CAP}",

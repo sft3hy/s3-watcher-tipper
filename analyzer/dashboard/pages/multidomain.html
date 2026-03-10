@@ -1,0 +1,24 @@
+<div id="page-multidomain" class="page">
+    <div style="display:flex;gap:2px;margin-bottom:16px;flex-wrap:wrap" id="domain-subtabs">
+        <button class="tab active" onclick="showDomainSub('maritime')">🚢 Maritime / SHADOWFLEET</button>
+        <button class="tab" onclick="showDomainSub('aviation')">✈ Aviation / ADS-B</button>
+        <button class="tab" onclick="showDomainSub('cyber')">🔒 Cyber</button>
+        <button class="tab" onclick="showDomainSub('rf')">📡 RF / SIGINT</button>
+        <button class="tab" onclick="showDomainSub('osint')">🌐 OSINT</button>
+    </div>
+    <div id="domain-maritime" class="domain-sub active">
+        <div class="chart-grid cols2" id="maritime-charts"></div>
+    </div>
+    <div id="domain-aviation" class="domain-sub" style="display:none">
+        <div class="chart-grid cols2" id="aviation-charts"></div>
+    </div>
+    <div id="domain-cyber" class="domain-sub" style="display:none">
+        <div class="chart-grid cols2" id="cyber-charts"></div>
+    </div>
+    <div id="domain-rf" class="domain-sub" style="display:none">
+        <div class="chart-grid cols2" id="rf-charts"></div>
+    </div>
+    <div id="domain-osint" class="domain-sub" style="display:none">
+        <div class="chart-grid cols2" id="osint-charts"></div>
+    </div>
+</div>
