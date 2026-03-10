@@ -256,6 +256,7 @@ def load_from_clickhouse(host: str) -> dict:
         {_TIME_FILTER}
           AND (device_to_unit_association_score IS NOT NULL
                OR device_at_unit_site_occupancy_metric IS NOT NULL)
+        ORDER BY rand()
         LIMIT {_ROW_CAP}
     """,
         "unit_scores",
@@ -340,6 +341,7 @@ def load_from_clickhouse(host: str) -> dict:
         FROM sigint_data
         {_TIME_FILTER}
           AND (speed IS NOT NULL OR heading IS NOT NULL OR altitude IS NOT NULL)
+        ORDER BY rand()
         LIMIT {_ROW_CAP}
     """,
         "movement",
@@ -421,6 +423,7 @@ def load_from_clickhouse(host: str) -> dict:
         SELECT {', '.join(anom_present)}
         FROM sigint_data
         {_TIME_FILTER}
+        ORDER BY rand()
         LIMIT {_ROW_CAP}
     """,
         "anomalies",
@@ -494,7 +497,7 @@ def load_from_clickhouse(host: str) -> dict:
     if maritime_present:
         df_mar = _q(
             client,
-            f"SELECT {', '.join(maritime_present)} FROM sigint_data {_TIME_FILTER} LIMIT {_ROW_CAP}",
+            f"SELECT {', '.join(maritime_present)} FROM sigint_data {_TIME_FILTER} AND (mmsi IS NOT NULL OR imo IS NOT NULL) ORDER BY rand() LIMIT {_ROW_CAP}",
             "maritime",
         )
         maritime_out = (
@@ -508,7 +511,7 @@ def load_from_clickhouse(host: str) -> dict:
     if aviation_present:
         df_avi = _q(
             client,
-            f"SELECT {', '.join(aviation_present)} FROM sigint_data {_TIME_FILTER} LIMIT {_ROW_CAP}",
+            f"SELECT {', '.join(aviation_present)} FROM sigint_data {_TIME_FILTER} AND (icao24 IS NOT NULL OR callsign IS NOT NULL) ORDER BY rand() LIMIT {_ROW_CAP}",
             "aviation",
         )
         aviation_out = (
@@ -528,7 +531,7 @@ def load_from_clickhouse(host: str) -> dict:
     if cyber_present:
         df_cyb = _q(
             client,
-            f"SELECT {', '.join(cyber_present)} FROM sigint_data {_TIME_FILTER} LIMIT {_ROW_CAP}",
+            f"SELECT {', '.join(cyber_present)} FROM sigint_data {_TIME_FILTER} AND (ip_address IS NOT NULL OR domain IS NOT NULL) ORDER BY rand() LIMIT {_ROW_CAP}",
             "cyber",
         )
         cyber_out = fuse_cyber(df_cyb) if not df_cyb.empty else {"_has_data": False}
@@ -540,7 +543,7 @@ def load_from_clickhouse(host: str) -> dict:
     if rf_present:
         df_rf = _q(
             client,
-            f"SELECT {', '.join(rf_present)} FROM sigint_data {_TIME_FILTER} LIMIT {_ROW_CAP}",
+            f"SELECT {', '.join(rf_present)} FROM sigint_data {_TIME_FILTER} AND (frequency_mhz IS NOT NULL OR emitter_id IS NOT NULL) ORDER BY rand() LIMIT {_ROW_CAP}",
             "rf",
         )
         rf_out = fuse_rf(df_rf) if not df_rf.empty else {"_has_data": False}
@@ -552,7 +555,7 @@ def load_from_clickhouse(host: str) -> dict:
     if osint_present:
         df_os = _q(
             client,
-            f"SELECT {', '.join(osint_present)} FROM sigint_data {_TIME_FILTER} LIMIT {_ROW_CAP}",
+            f"SELECT {', '.join(osint_present)} FROM sigint_data {_TIME_FILTER} AND (source_url IS NOT NULL OR sentiment_score IS NOT NULL) ORDER BY rand() LIMIT {_ROW_CAP}",
             "osint",
         )
         osint_out = fuse_osint(df_os) if not df_os.empty else {"_has_data": False}
@@ -577,7 +580,7 @@ def load_from_clickhouse(host: str) -> dict:
     if has_isp:
         df_sky = _q(
             client,
-            f"SELECT {', '.join(skytrace_present)} FROM sigint_data {_TIME_FILTER} LIMIT {_ROW_CAP}",
+            f"SELECT {', '.join(skytrace_present)} FROM sigint_data {_TIME_FILTER} AND (isp_name IS NOT NULL OR satellite_provider IS NOT NULL OR connection_type IS NOT NULL) ORDER BY rand() LIMIT {_ROW_CAP}",
             "skytrace",
         )
         skytrace_out = (
