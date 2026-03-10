@@ -106,21 +106,12 @@ ingress:
     kubernetes.io/ingress.class: cosmichorizon-nginx
     nginx.ingress.kubernetes.io/configuration-snippet: |
       rewrite ^(/s3-watcher)$ $1/ permanent;
-    nginx.ingress.kubernetes.io/rewrite-target: /$2
     project: cosmichorizon
   hosts:
     - host: test-cosmichorizon-worker-68a3110f01feebd0.elb.us-gov-west-1.amazonaws.com
       paths:
-        - path: /s3-watcher(/)(api/.*)
-          pathType: ImplementationSpecific
-          backendName: analyze
-          backendPort: 8000
-        - path: /s3-watcher(/)(ws$|ws/.*)
-          pathType: ImplementationSpecific
-          backendName: analyze
-          backendPort: 8000
-        - path: /s3-watcher(/|$)(.*)
-          pathType: ImplementationSpecific
+        - path: /s3-watcher
+          pathType: Prefix
           backendName: analyze
           backendPort: 8000
   tls: []
