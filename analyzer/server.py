@@ -12,14 +12,14 @@ class Handler(BaseHTTPRequestHandler):
 
     def do_GET(self):
         parsed = urlparse(self.path)
-        if parsed.path == "/data":
+        if parsed.path == "/s3-watcher/data":
             body = json.dumps(DATA_CACHE).encode()
             self.send_response(200)
             self.send_header("Content-Type", "application/json")
             self.send_header("Access-Control-Allow-Origin", "*")
             self.end_headers()
             self.wfile.write(body)
-        elif parsed.path == "/" or parsed.path == "/index.html":
+        elif parsed.path in ("/s3-watcher", "/s3-watcher/", "/s3-watcher/index.html"):
             html = build_html()
             self.send_response(200)
             self.send_header("Content-Type", "text/html")

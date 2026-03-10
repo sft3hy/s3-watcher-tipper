@@ -1036,7 +1036,7 @@
         // ── bootstrap ──
         async function boot() {
             try {
-                const res = await fetch('/data');
+                const res = await fetch('/s3-watcher/data');
                 D = await res.json();
                 document.getElementById('loading').style.display = 'none';
                 document.getElementById('data-meta').textContent =
