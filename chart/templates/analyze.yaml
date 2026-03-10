@@ -24,7 +24,7 @@ spec:
         - name: analyze
           image: "{{ .Values.image.repository }}:{{ .Values.image.tag }}"
           imagePullPolicy: {{ .Values.image.pullPolicy }}
-          command: ["python", "analyze.py"]
+          command: ["python", "-m", "analyzer.main"]
           env:
             - name: CLICKHOUSE_HOST
               value: {{ include "s3-watcher.fullname" . }}-clickhouse

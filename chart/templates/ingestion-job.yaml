@@ -53,10 +53,10 @@ spec:
           
           # We use clickhouse native S3 credentials (inherited by the server process)
           clickhouse-client --host $CLICKHOUSE_HOST --user $CLICKHOUSE_USER --password $CLICKHOUSE_PASSWORD --query="
+            SET schema_inference_make_columns_nullable=1;
             CREATE TABLE IF NOT EXISTS sigint_data  
             ENGINE = MergeTree 
             ORDER BY tuple() 
-            SETTINGS schema_inference_make_columns_nullable=1 
             AS SELECT * FROM s3('${S3_URI}', '${AWS_ACCESS_KEY_ID}', '${AWS_SECRET_ACCESS_KEY}', 'Parquet')
           "
           
