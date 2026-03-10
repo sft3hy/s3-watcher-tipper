@@ -361,10 +361,6 @@ def fuse_network(df):
         if col in df.columns and df[col].notna().any():
             vc = df[col].value_counts().head(10)
             out[col] = [{"label": str(k), "value": int(v)} for k, v in vc.items()]
-
-    # ip_enrichment parsed breakdown
-    if "ip_enrichment" in df.columns and df["ip_enrichment"].notna().any():
-        out["ip_enrichment_sample"] = list(df["ip_enrichment"].dropna().unique()[:5])
     return out
 
 
