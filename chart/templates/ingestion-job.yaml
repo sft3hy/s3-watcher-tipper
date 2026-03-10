@@ -58,7 +58,6 @@ spec:
             DROP TABLE IF EXISTS sigint_data;
             SET schema_inference_make_columns_nullable=1;
             SET use_hive_partitioning = 1;
-            SET input_format_hive_partitioning_ignore_errors = 1;
             SET schema_inference_hints='isp_name String, connection_type String, satellite_provider String, vpn_detected String, ip_geo_country String, ip_geo_city String, entity_id String, event_time DateTime64(3), device_brand String, device_model String, carrier String, wifi_ssid String, entity_type String, entity_age Int32';
             CREATE TABLE sigint_data  
             ENGINE = MergeTree 
